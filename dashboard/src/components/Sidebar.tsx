@@ -98,7 +98,8 @@ const NAV_GROUPS: NavGroup[] = [
     title: "النظام",
     items: [
       { href: "/logging", label: "السجلات", icon: FileText },
-      { href: "/logs", label: "سجل الإجراءات", icon: History },
+      { href: "/logs", label: "سجلات السيرفر", icon: History },
+      { href: "/audit", label: "تغييرات الداشبورد", icon: History },
       { href: "/backup", label: "النسخ الاحتياطي", icon: Database },
       { href: "/templates", label: "قوالب السيرفر", icon: LayoutTemplate },
       { href: "/commands", label: "إدارة الأوامر", icon: Settings },

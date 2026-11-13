@@ -18,6 +18,7 @@ export * from "./models/ModerationLog";
 export * from "./models/ActionLog";
 export * from "./models/ServerTemplate";
 export * from "./models/LogEntry";
+export * from "./models/PendingCaptcha";
 export * from "./utils/variables";
 export * from "./utils/leveling";
 export * from "./utils/cooldown";

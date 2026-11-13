@@ -458,30 +458,72 @@ async function handleTicketCloseButton(interaction: ButtonInteraction, client: E
     return;
   }
 
+  const modal = new ModalBuilder()
+    .setCustomId("ticket_close_reason")
+    .setTitle("إغلاق التذكرة");
+  const reasonInput = new TextInputBuilder()
+    .setCustomId("reason")
+    .setLabel("سبب الإغلاق (اختياري)")
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(false)
+    .setMaxLength(500);
+  modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(reasonInput));
+  await interaction.showModal(modal);
+}
+
+async function handleTicketCloseModal(interaction: ModalSubmitInteraction, client: ExtendedClient): Promise<void> {
+  const channel = interaction.channel;
+  const guild = interaction.guild;
+  if (!guild || !channel || channel.type !== ChannelType.GuildText) return;
+  const ticket = await Ticket.findOne({ channelId: channel.id, status: "open" });
+  if (!ticket) {
+    await interaction.reply({ content: "هذه التذكرة غير موجودة أو مغلقة بالفعل.", ephemeral: true });
+    return;
+  }
+  const gConfig = await getGuildConfig(client, guild.id);
+  const category = gConfig.tickets.categories.find((c) => c.key === ticket.categoryKey);
+  const member = await guild.members.fetch(interaction.user.id).catch(() => null);
+  const isStaff = !!member && (
+    (category?.staffRoleIds ?? []).some((roleId) => member.roles.cache.has(roleId)) ||
+    member.permissions.has(PermissionFlagsBits.Administrator)
+  );
+  if (!isStaff) {
+    await interaction.reply({ content: "لا تملك صلاحية إغلاق هذه التذكرة.", ephemeral: true });
+    return;
+  }
+
+  const reason = interaction.fields.getTextInputValue("reason").trim().slice(0, 500) || undefined;
+  await interaction.reply({ content: "جارٍ إغلاق التذكرة وحفظ نسخة المحادثة...", ephemeral: true });
   const closeMsg = category?.closeMessage;
-  
   if (closeMsg?.enabled) {
     const varsCtx: VariableContext = {
-      user: {
-        id: member.id,
-        username: member.user.username,
-        tag: member.user.tag,
-        mention: `<@${member.id}>`,
-        avatarURL: member.user.displayAvatarURL()
-      },
-      server: {
-        name: guild.name,
-        id: guild.id,
-        memberCount: guild.memberCount,
-        iconURL: guild.iconURL() ?? undefined
-      }
+      user: { id: member.id, username: member.user.username, tag: member.user.tag, mention: `<@${member.id}>`, avatarURL: member.user.displayAvatarURL() },
+      server: { name: guild.name, id: guild.id, memberCount: guild.memberCount, iconURL: guild.iconURL() ?? undefined }
     };
-    const closePayload = buildMessageFromCustom(closeMsg, varsCtx);
-    await interaction.reply({ ...closePayload, content: closePayload.content || "جارٍ إغلاق التذكرة وإنشاء سجل المحادثة..." });
-  } else {
-    await interaction.reply({ content: "جارٍ إغلاق التذكرة وإنشاء سجل المحادثة..." });
+    const payload = buildMessageFromCustom(closeMsg, varsCtx);
+    await (channel as TextChannel).send({ ...payload, content: payload.content || "تم إغلاق التذكرة." }).catch(() => null);
   }
-  await closeTicket(channel as TextChannel, member.id, client);
+  await closeTicket(channel as TextChannel, member.id, client, reason);
+}
+
+async function handleTicketRating(interaction: ButtonInteraction): Promise<void> {
+  const [, , channelId, scoreRaw] = interaction.customId.split("_");
+  const score = Number(scoreRaw);
+  if (!/^\d{17,20}$/.test(channelId ?? "") || !Number.isInteger(score) || score < 1 || score > 5) return;
+  const ticket = await Ticket.findOne({ channelId, status: "closed" });
+  if (!ticket || ticket.ownerId !== interaction.user.id) {
+    await interaction.reply({ content: "هذا التقييم غير متاح لحسابك.", ephemeral: true });
+    return;
+  }
+  if (ticket.rating !== undefined) {
+    await interaction.reply({ content: "تم تسجيل تقييم لهذه التذكرة مسبقًا.", ephemeral: true });
+    return;
+  }
+  ticket.rating = score;
+  ticket.ratedAt = new Date();
+  await ticket.save();
+  await createNotification(ticket.guildId, "ticket", `تقييم جديد للتذكرة #${ticket.number}`, `التقييم: ${score} من 5.`).catch(() => null);
+  await interaction.update({ content: `تم تسجيل تقييمك: ${score} من 5. شكرًا لملاحظتك.`, components: [] });
 }
 
 /**
@@ -492,7 +534,8 @@ async function handleTicketCloseButton(interaction: ButtonInteraction, client: E
 export async function closeTicket(
   channel: TextChannel,
   closedById: string,
-  client: ExtendedClient
+  client: ExtendedClient,
+  closedReason?: string
 ): Promise<{ success: boolean; reason?: string }> {
   const ticket = await Ticket.findOne({ channelId: channel.id, status: "open" });
   if (!ticket) {
@@ -502,13 +545,14 @@ export async function closeTicket(
   ticket.status = "closed";
   ticket.closedBy = closedById;
   ticket.closedAt = new Date();
+  ticket.closedReason = closedReason?.trim().slice(0, 500) || undefined;
   await ticket.save();
 
   await createNotification(
     channel.guild.id,
     "ticket",
     `تم إغلاق التذكرة #${ticket.number}`,
-    `أغلقها <@${closedById}>`
+    [`أغلقها <@${closedById}>`, ticket.closedReason ? `السبب: ${ticket.closedReason}` : ""].filter(Boolean).join("\n")
   ).catch(() => null);
 
   const gConfig = await getGuildConfig(client, channel.guild.id);
@@ -533,7 +577,8 @@ export async function closeTicket(
             { name: "رقم التذكرة", value: `#${ticket.number}`, inline: true },
             { name: "التصنيف", value: category?.name ?? ticket.categoryKey, inline: true },
             { name: "صاحب التذكرة", value: `<@${ticket.ownerId}>`, inline: true },
-            { name: "أغلقها", value: `<@${closedById}>`, inline: true }
+            { name: "أغلقها", value: `<@${closedById}>`, inline: true },
+            ...(ticket.closedReason ? [{ name: "سبب الإغلاق", value: ticket.closedReason.slice(0, 1024), inline: false }] : [])
           )
           .setTimestamp();
 
@@ -560,6 +605,16 @@ export async function closeTicket(
   } catch (err) {
     logError("ticket-transcript", err);
   }
+
+  const ratingRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    ...[1, 2, 3, 4, 5].map((score) => new ButtonBuilder()
+      .setCustomId(`ticket_rate_${ticket.channelId}_${score}`)
+      .setLabel(String(score))
+      .setStyle(score <= 2 ? ButtonStyle.Secondary : ButtonStyle.Success))
+  );
+  await client.users.fetch(ticket.ownerId)
+    .then((user) => user.send({ content: `أُغلقت تذكرتك رقم ${ticket.number}. قيّم تجربتك من 1 إلى 5:`, components: [ratingRow] }))
+    .catch(() => null);
 
   setTimeout(() => {
     channel.delete().catch(() => {});
@@ -656,5 +711,7 @@ export function registerTicketComponents(router: ComponentRouter): void {
 
   router.registerButton("ticket_claim", handleTicketClaim);
   router.registerButton("ticket_close", handleTicketCloseButton);
+  router.registerButton("ticket_rate_", handleTicketRating);
+  router.registerModal("ticket_close_reason", handleTicketCloseModal);
   router.registerModal("ticket_modal_", handleTicketModalSubmit);
 }

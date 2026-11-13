@@ -4,7 +4,7 @@ import { registerTicketComponents } from "./tickets/ticketManager";
 import { registerTempVoiceComponents } from "./tempVoice/voiceManager";
 import { registerColorComponents } from "./roles/colorRoles";
 import { registerSelfRoleComponents } from "./roles/selfRoles";
-import { registerCaptchaComponents } from "./captcha/captcha";
+import { expirePendingCaptchas, registerCaptchaComponents } from "./captcha/captcha";
 import { registerXpScheduler } from "./leveling/xpManager";
 import { startJailExpiryInterval } from "./jail/expiry";
 import { startAlwaysVoiceLoop } from "./alwaysVoice/alwaysVoiceManager";
@@ -41,6 +41,7 @@ export function registerAllModules(client: ExtendedClient) {
     });
     registerRecurring("scheduled-messages", 30_000, scanScheduledMessages);
     registerRecurring("islamic-due", 15_000, scanIslamicDue);
+    registerRecurring("captcha-expiry", 30_000, () => expirePendingCaptchas(client));
     registerFlushHandler("afk", () => flushAfkMentions());
     registerFlushHandler("suggestion-votes", () => flushVotes());
     startScheduler(client);

@@ -279,6 +279,31 @@ export async function getBotTopRolePosition(guildId: string): Promise<number> {
   }
 }
 
+/** الصلاحيات الفعلية للبوت على مستوى السيرفر بعد جمع صلاحيات @everyone ورتبه. */
+export async function getGuildBotPermissions(guildId: string): Promise<bigint | null> {
+  try {
+    const meResponse = await fetch(`${API_BASE}/users/@me`, { headers: botHeaders(), cache: "no-store" });
+    if (!meResponse.ok) return null;
+    const botId = ((await meResponse.json()) as { id: string }).id;
+    const [memberResponse, roles] = await Promise.all([
+      fetch(`${API_BASE}/guilds/${guildId}/members/${botId}`, { headers: botHeaders(), cache: "no-store" }),
+      getGuildRoles(guildId)
+    ]);
+    if (!memberResponse.ok) return null;
+    const member = (await memberResponse.json()) as { roles?: string[] };
+    const roleIds = new Set([guildId, ...(member.roles ?? [])]);
+    let permissions = 0n;
+    for (const role of roles) {
+      if (!roleIds.has(role.id)) continue;
+      try { permissions |= BigInt(role.permissions); } catch { /* ignore invalid upstream values */ }
+    }
+    if ((permissions & (1n << 3n)) !== 0n) return (1n << 53n) - 1n;
+    return permissions;
+  } catch {
+    return null;
+  }
+}
+
 /** تحقق من إمكانية إدارة القائمة كاملة: @everyone + رتب مُدارة + رتب أعلى من البوت */
 export function validateRolePanel(
   guildId: string,

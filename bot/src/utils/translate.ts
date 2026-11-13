@@ -109,12 +109,14 @@ function providerFailureStatus(error: unknown): number | null {
 
 function coolDownProvider(provider: string, error: unknown): void {
   const status = providerFailureStatus(error);
-  if (status !== 401 && status !== 429) return;
+  if (status !== 401 && status !== 429 && !(provider === "deepl" && status === 456)) return;
   const previous = providerCooldowns.get(provider)?.failures ?? 0;
   const failures = previous + 1;
   // Bing 401 here is the upstream CAPTCHA response; avoid retrying it on every message.
   const duration = status === 401
     ? 30 * 60_000
+    : status === 456
+      ? 60 * 60_000
     : Math.min(30 * 60_000, 60_000 * 2 ** Math.min(failures - 1, 5));
   providerCooldowns.set(provider, { until: Date.now() + duration, failures });
 }

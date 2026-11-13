@@ -2,10 +2,23 @@ import { ActionLog } from "@thez/shared";
 
 /** إخفاء أي قيم تشبه أسرارًا (token/secret/key/password) داخل أي نص سجل */
 export function redactSecrets(text: string): string {
-  return text.replace(
+  return text
+    .replace(/\bBearer\s+[^\s"']+/gi, "Bearer [REDACTED]")
+    .replace(/\bDeepL-Auth-Key\s+[^\s"']+/gi, "DeepL-Auth-Key [REDACTED]")
+    .replace(/\b[\w-]{24}\.[\w-]{6}\.[\w-]{25,}\b/g, "[REDACTED]")
+    .replace(
     /([&?][A-Za-z0-9_-]*(?:token|secret|key|password)[A-Za-z0-9_-]*?=)[^&\s]+/gi,
     "$1[REDACTED]"
-  );
+    );
+}
+
+function redactDetails(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactDetails);
+  if (!value || typeof value !== "object") return typeof value === "string" ? redactSecrets(value) : value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => {
+    if (/(?:token|secret|password|api.?key|authorization)/i.test(key)) return [key, "[REDACTED]"];
+    return [key, redactDetails(item)];
+  }));
 }
 
 /** سجل خطأ آمن على السيرفر: رسالة قصيرة + إخفاء أسرار (بدون رمي تفاصيل الحمولة) */
@@ -54,7 +67,7 @@ export function logAction(ctx: LogActionContext): void {
     userName: ctx.userName ?? undefined,
     label: ctx.label,
     action: ctx.action,
-    details: ctx.details,
+    details: redactDetails(ctx.details) as Record<string, unknown> | undefined,
     createdAt: new Date()
   }).catch((err) => console.error(`[action-log] فشل حفظ سجل الإجراء: ${redactSecrets(err?.message ?? String(err))}`));
 }

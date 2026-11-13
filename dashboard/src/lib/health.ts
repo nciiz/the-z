@@ -24,7 +24,9 @@ export interface HealthDeps {
   pingRedis(): Promise<{ ok: boolean; ms: number; connected: boolean }>;
   getConfig(guildId: string): Promise<any>;
   getChannels(guildId: string): Promise<Array<{ id: string; name: string }>>;
-  getRoles(guildId: string): Promise<Array<{ id: string; name: string }>>;
+  getRoles(guildId: string): Promise<Array<{ id: string; name: string; position?: number; managed?: boolean }>>;
+  getBotPermissions?(guildId: string): Promise<bigint | null>;
+  getBotTopRolePosition?(guildId: string): Promise<number>;
 }
 
 const SNOWFLAKE_RE = /^\d{17,20}$/;
@@ -62,13 +64,15 @@ const STALE_HEARTBEAT_SEC = 180;
 export async function getHealthData(guildId: string, deps: HealthDeps): Promise<HealthData> {
   const issues: HealthIssue[] = [];
 
-  const [heartbeat, database, redis, config, channels, roles] = await Promise.all([
+  const [heartbeat, database, redis, config, channels, roles, botPermissions, botTopRolePosition] = await Promise.all([
     deps.getHeartbeat().catch(() => null),
     deps.pingDb().catch(() => ({ ok: false, ms: -1 })),
     deps.pingRedis().catch(() => ({ ok: false, ms: -1, connected: false })),
     deps.getConfig(guildId).catch(() => null),
     deps.getChannels(guildId).catch(() => []),
-    deps.getRoles(guildId).catch(() => [])
+    deps.getRoles(guildId).catch(() => []),
+    deps.getBotPermissions ? deps.getBotPermissions(guildId).catch(() => null) : Promise.resolve(undefined),
+    deps.getBotTopRolePosition ? deps.getBotTopRolePosition(guildId).catch(() => Number.MAX_SAFE_INTEGER) : Promise.resolve(undefined)
   ]);
 
   if (!database.ok) {
@@ -98,6 +102,24 @@ export async function getHealthData(guildId: string, deps: HealthDeps): Promise<
 
   // تشخيص الإعدادات مقابل كاش ديسكورد (بلا REST إضافي هنا — القوائم مكشّنة أصلًا)
   if (config) {
+    if (botPermissions === null) {
+      issues.push({ severity: "warning", area: "permissions", message: "تعذر التحقق من صلاحيات البوت عبر Discord." });
+    } else if (botPermissions !== undefined) {
+      const required: { name: string; bit: bigint; when: boolean }[] = [
+        { name: "عرض القنوات", bit: 1n << 10n, when: true },
+        { name: "إرسال الرسائل", bit: 1n << 11n, when: true },
+        { name: "قراءة سجل الرسائل", bit: 1n << 16n, when: true },
+        { name: "إضافة روابط مضمنة", bit: 1n << 14n, when: true },
+        { name: "إدارة القنوات", bit: 1n << 4n, when: !!config.tickets?.enabled || !!config.tempVoice?.enabled },
+        { name: "إدارة الرتب", bit: 1n << 28n, when: !!config.captcha?.enabled || !!config.jail?.enabled || !!config.autoRole?.enabled || (config.antiNuke?.enabled && config.antiNuke.punishment === "stripRoles") },
+        { name: "مهلة الأعضاء", bit: 1n << 40n, when: !!config.automod?.enabled },
+        { name: "إدارة الرسائل", bit: 1n << 13n, when: !!config.automod?.enabled },
+        { name: "طرد الأعضاء", bit: 1n << 1n, when: !!config.captcha?.enabled || (config.antiNuke?.enabled && config.antiNuke.punishment === "kick") },
+        { name: "حظر الأعضاء", bit: 1n << 2n, when: !!config.antiNuke?.enabled && config.antiNuke.punishment === "ban" }
+      ];
+      const missing = required.filter((permission) => permission.when && (botPermissions & permission.bit) !== permission.bit).map((permission) => permission.name);
+      if (missing.length) issues.push({ severity: "warning", area: "permissions", message: `صلاحيات ناقصة للبوت: ${missing.join(", ")}` });
+    }
     const channelIds = new Set(channels.map((c) => c.id));
     const roleIds = new Set(roles.map((r) => r.id));
     for (const path of CHANNEL_PATHS) {
@@ -127,6 +149,23 @@ export async function getHealthData(guildId: string, deps: HealthDeps): Promise<
           });
         }
       }
+    }
+    if (typeof botTopRolePosition === "number" && botTopRolePosition < Number.MAX_SAFE_INTEGER) {
+      const assignableRoleIds: string[] = [
+        config.captcha?.verifiedRoleId,
+        config.jail?.roleId,
+        ...(config.autoRole?.userRoleIds ?? []),
+        ...(config.autoRole?.botRoleIds ?? []),
+        ...(config.selfRoles ?? []).flatMap((panel: any) => (panel.options ?? []).map((option: any) => option.roleId)),
+        ...(config.colors?.roles ?? []).map((role: any) => role.roleId),
+        ...(config.leveling?.roleRewards ?? []).map((reward: any) => reward.roleId)
+      ].filter((id): id is string => typeof id === "string");
+      const roleById = new Map(roles.map((role) => [role.id, role]));
+      const unmanageable = [...new Set(assignableRoleIds)].flatMap((id) => {
+        const role = roleById.get(id);
+        return role && (role.managed || (typeof role.position === "number" && role.position >= botTopRolePosition)) ? [role.name] : [];
+      });
+      if (unmanageable.length) issues.push({ severity: "warning", area: "permissions", message: `رتب لا يستطيع البوت منحها بسبب التسلسل أو كونها مُدارة: ${[...new Set(unmanageable)].join(", ")}` });
     }
     // رسائل مجدولة تشير لقنوات محذوفة (بحد أعلى 20)
     const scheduled = Array.isArray((config as any).scheduledMessages) ? (config as any).scheduledMessages : [];

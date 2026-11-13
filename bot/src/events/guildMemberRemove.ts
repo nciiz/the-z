@@ -5,6 +5,7 @@ import { sendLeaveMessage } from "../modules/welcome/welcomeManager";
 import { sendLog } from "../modules/logging/logger";
 import { handleMemberRemove as handleAntiNukeMemberRemove } from "../modules/antinuke/antinuke";
 import { trackLeave } from "../modules/analytics/analytics";
+import { PendingCaptcha } from "@thez/shared";
 
 const event: BotEvent = {
   name: "guildMemberRemove",
@@ -12,6 +13,7 @@ const event: BotEvent = {
     const guildMember = member as GuildMember;
     if (!(guildMember.user as User | undefined)?.bot) trackLeave(guildMember.guild.id);
     const gConfig = await getGuildConfig(client, guildMember.guild.id);
+    await PendingCaptcha.deleteOne({ guildId: guildMember.guild.id, userId: guildMember.id }).catch(() => null);
     if (gConfig.antiNuke?.enabled) {
       await handleAntiNukeMemberRemove(client, guildMember, gConfig).catch(() => null);
     }

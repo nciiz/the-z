@@ -8,6 +8,7 @@ const command: BotCommand = {
   name: "ticket-close",
   description: "إغلاق التذكرة الحالية",
   category: "تذاكر",
+  options: [{ name: "reason", description: "سبب إغلاق التذكرة", type: "string", required: false }],
   async run(ctx) {
     const channel = ctx.channel as TextChannel;
     const ticket = await Ticket.findOne({ channelId: channel.id, status: "open" });
@@ -29,7 +30,7 @@ const command: BotCommand = {
     }
 
     await ctx.reply("🔒 جارٍ إغلاق التذكرة وإنشاء سجل المحادثة...");
-    await closeTicket(channel, ctx.user.id, ctx.client);
+    await closeTicket(channel, ctx.user.id, ctx.client, ctx.getString("reason") ?? undefined);
   }
 };
 

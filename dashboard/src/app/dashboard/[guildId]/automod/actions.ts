@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { GuildConfig, IGuildConfig } from "@thez/shared";
 import { ensureDb } from "@/lib/db";
 import { requireGuildAdmin } from "@/lib/guildAccess";
-import { logError } from "@/lib/logger";
+import { logAction, logError, summarizeConfig } from "@/lib/logger";
 
 export type AutomodInput = Omit<IGuildConfig["automod"], "punishments" | "timeoutDurations"> & { 
   autoDeleteConfirmation?: number; 
@@ -14,7 +14,7 @@ export type AutomodInput = Omit<IGuildConfig["automod"], "punishments" | "timeou
 
 export async function saveAutomodConfig(guildId: string, data: AutomodInput) {
   try {
-    await requireGuildAdmin(guildId);
+    const session = await requireGuildAdmin(guildId);
     await ensureDb();
 
     const { autoDeleteConfirmation, punishments, timeoutDurations, ...automodData } = data;
@@ -29,6 +29,9 @@ export async function saveAutomodConfig(guildId: string, data: AutomodInput) {
       },
       { upsert: true }
     );
+
+    logAction({ label: "automod/save", guildId, userId: (session.user as any).id, userName: session.user?.name ?? undefined,
+      action: "حفظ إعدادات الرقابة التلقائية", details: summarizeConfig(automodData as unknown as Record<string, unknown>) });
 
     revalidatePath(`/dashboard/${guildId}/automod`);
   } catch (error) {

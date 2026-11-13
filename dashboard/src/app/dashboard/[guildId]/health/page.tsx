@@ -1,8 +1,9 @@
 import { requireGuildAdmin } from "@/lib/guildAccess";
 import { ensureDb } from "@/lib/db";
 import { GuildConfig, Heartbeat, getPool, isRedisAvailable } from "@thez/shared";
-import { getGuildChannels, getGuildRoles } from "@/lib/discord";
+import { getGuildChannels, getGuildRoles, getGuildBotPermissions, getBotTopRolePosition } from "@/lib/discord";
 import { getCachedHealthData } from "@/lib/health";
+import { getDeepLUsage } from "@/lib/deepl";
 import { Activity } from "lucide-react";
 
 function StatusDot({ ok }: { ok: boolean }) {
@@ -42,8 +43,11 @@ export default async function HealthPage({ params }: { params: { guildId: string
       return GuildConfig.findOne({ guildId: id }).lean().catch(() => null);
     },
     getChannels: (id: string) => getGuildChannels(id).catch(() => []),
-    getRoles: (id: string) => getGuildRoles(id).catch(() => [])
+    getRoles: (id: string) => getGuildRoles(id).catch(() => []),
+    getBotPermissions: (id: string) => getGuildBotPermissions(id),
+    getBotTopRolePosition: (id: string) => getBotTopRolePosition(id)
   });
+  const deepL = await getDeepLUsage();
 
   const m = data.metrics as Record<string, number>;
 
@@ -71,6 +75,20 @@ export default async function HealthPage({ params }: { params: { guildId: string
           </div>
         ))}
       </div>
+
+      <section className="card mt-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-bold">استهلاك ترجمة DeepL</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            {deepL.status === "unconfigured" ? "لم تتم إضافة DEEPL_API_KEY إلى بيئة الخدمة." :
+              deepL.status === "error" ? "تعذر جلب الاستخدام؛ تحقق من المفتاح واتصال الخدمة." :
+                `${deepL.characterCount.toLocaleString("ar")} من ${deepL.characterLimit.toLocaleString("ar")} حرف (${deepL.percent.toFixed(1)}%)`}
+          </p>
+        </div>
+        {deepL.status === "ok" && <div className="h-2 w-40 overflow-hidden rounded-full bg-[#393B30]">
+          <div className={`h-full ${deepL.percent >= 90 ? "bg-[#ED4245]" : "bg-[#3BA55C]"}`} style={{ width: `${deepL.percent}%` }} />
+        </div>}
+      </section>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="card flex flex-col gap-3">

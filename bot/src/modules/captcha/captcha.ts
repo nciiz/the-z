@@ -6,7 +6,7 @@ import {
   EmbedBuilder,
   GuildMember
 } from "discord.js";
-import { IGuildConfig } from "@thez/shared";
+import { IGuildConfig, PendingCaptcha } from "@thez/shared";
 import { ExtendedClient } from "../../client";
 import { logError } from "../../utils/logger";
 import { ComponentRouter } from "../../handlers/componentRouter";
@@ -50,6 +50,7 @@ export async function handleMemberJoinCaptcha(
 
   let sent = false;
   let captchaMessageId: string | undefined;
+  let captchaChannelId: string | undefined;
   if (gConfig.captcha.channelId) {
     const channel = await client.channels.fetch(gConfig.captcha.channelId).catch(() => null);
     if (channel && channel.isTextBased()) {
@@ -57,6 +58,7 @@ export async function handleMemberJoinCaptcha(
       if (message) {
         sent = true;
         captchaMessageId = message.id;
+        captchaChannelId = channel.id;
       }
     }
   }
@@ -70,33 +72,48 @@ export async function handleMemberJoinCaptcha(
   }
 
   const kickAfterMs = (gConfig.captcha.kickAfterMinutes || 10) * 60 * 1000;
-  setTimeout(async () => {
-    try {
-      const guild = client.guilds.cache.get(member.guild.id);
-      if (!guild) return;
-
-      const freshMember = await guild.members.fetch(member.id).catch(() => null);
-      if (!freshMember) return; // العضو غادر السيرفر بالفعل
-
-      const freshConfig = await getGuildConfig(client, guild.id);
-      const unverifiedRoleId = freshConfig.captcha?.unverifiedRoleId;
-
-      if (unverifiedRoleId && freshMember.roles.cache.has(unverifiedRoleId)) {
-        // Delete captcha message before kicking
-        if (freshConfig.captcha.channelId && freshConfig.captcha.messageId) {
-          const channel = await client.channels.fetch(freshConfig.captcha.channelId).catch(() => null);
-          if (channel && channel.isTextBased()) {
-            await (channel as any).messages.delete(freshConfig.captcha.messageId).catch(() => null);
-          }
-        }
-        await freshMember.kick("لم يتم التحقق من الكابتشا في الوقت المحدد").catch(() => null);
-      }
-    } catch (err) {
-      logError("captcha-kick", err);
-    }
-  }, kickAfterMs);
+  await PendingCaptcha.deleteOne({ guildId: member.guild.id, userId: member.id }).catch(() => null);
+  const expiresAtMs = Date.now() + kickAfterMs;
+  await PendingCaptcha.create({
+    guildId: member.guild.id,
+    userId: member.id,
+    expiresAt: new Date(expiresAtMs),
+    expiresAtMs,
+    channelId: captchaChannelId,
+    messageId: captchaMessageId,
+    createdAt: new Date()
+  });
 
   return true;
+}
+
+/** يتحقق من الكابتشا المنتهية من قاعدة البيانات كي تستمر المهلة بعد إعادة تشغيل البوت. */
+export async function expirePendingCaptchas(client: ExtendedClient): Promise<void> {
+  const now = Date.now();
+  const pending = await PendingCaptcha.find({ expiresAtMs: { $lte: now } }).catch(() => []);
+  for (const entry of pending) {
+    const guild = client.guilds.cache.get(entry.guildId);
+    if (!guild) continue;
+    try {
+      const freshMember = await guild.members.fetch(entry.userId).catch(() => null);
+      if (freshMember) {
+        const freshConfig = await getGuildConfig(client, guild.id);
+        const roleId = freshConfig.captcha?.unverifiedRoleId;
+        if (freshConfig.captcha?.enabled && roleId && freshMember.roles.cache.has(roleId)) {
+          if (entry.channelId && entry.messageId) {
+            const channel = await client.channels.fetch(entry.channelId).catch(() => null);
+            if (channel?.isTextBased()) await (channel as any).messages.delete(entry.messageId).catch(() => null);
+          }
+          await freshMember.kick("لم يتم التحقق من الكابتشا في الوقت المحدد").catch((err) => {
+            logError("captcha-kick", err);
+          });
+        }
+      }
+      await PendingCaptcha.deleteOne({ guildId: entry.guildId, userId: entry.userId }).catch(() => null);
+    } catch (err) {
+      logError("captcha-expiry", err);
+    }
+  }
 }
 
 /** يسجّل معالج زر التحقق من الكابتشا في موجّه التفاعلات */
@@ -115,6 +132,8 @@ export function registerCaptchaComponents(router: ComponentRouter): void {
     if (!member) return;
 
     const gConfig = await getGuildConfig(client, interaction.guild.id);
+
+    await PendingCaptcha.deleteOne({ guildId: interaction.guild.id, userId: interaction.user.id }).catch(() => null);
 
     if (gConfig.captcha.unverifiedRoleId) {
       await member.roles.remove(gConfig.captcha.unverifiedRoleId).catch(() => null);

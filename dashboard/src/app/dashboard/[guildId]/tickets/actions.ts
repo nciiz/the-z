@@ -4,10 +4,11 @@ import { revalidatePath } from "next/cache";
 import { GuildConfig, IGuildConfig } from "@thez/shared";
 import { ensureDb } from "@/lib/db";
 import { requireGuildAdmin } from "@/lib/guildAccess";
+import { logAction, logError, summarizeConfig } from "@/lib/logger";
 
 export async function saveTicketsConfig(guildId: string, data: IGuildConfig["tickets"]) {
   try {
-    await requireGuildAdmin(guildId);
+    const session = await requireGuildAdmin(guildId);
     if (!data || !Array.isArray(data.categories) || data.categories.length > 25) {
       throw new Error("يمكن إعداد 25 تصنيف تذاكر كحد أقصى.");
     }
@@ -27,8 +28,18 @@ export async function saveTicketsConfig(guildId: string, data: IGuildConfig["tic
       { upsert: true }
     );
 
+    logAction({
+      label: "tickets/save",
+      guildId,
+      userId: (session.user as any).id,
+      userName: session.user?.name ?? undefined,
+      action: "حفظ إعدادات التذاكر",
+      details: summarizeConfig(data as unknown as Record<string, unknown>)
+    });
+
     revalidatePath(`/dashboard/${guildId}/tickets`);
   } catch (error) {
+    logError("tickets/save", error);
     throw error;
   }
 }

@@ -16,6 +16,8 @@ export interface ITicket {
   transcriptUrl?: string;
   closedBy?: string;
   closedReason?: string;
+  rating?: number;
+  ratedAt?: Date;
   createdAt: Date;
   closedAt?: Date;
 }
