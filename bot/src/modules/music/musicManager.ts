@@ -24,7 +24,15 @@ export function initializeLavalink(client: ExtendedClient): void {
       retryAmount: 10,
       retryDelay: 5_000
     }],
-    sendToShard: (guildId, payload) => client.guilds.cache.get(guildId)?.shard?.send(payload),
+    sendToShard: (guildId, payload) => {
+      const guild = client.guilds.cache.get(guildId);
+      const shard = guild && client.ws.shards.get(guild.shardId);
+      if (!shard) {
+        console.warn(`[music/lavalink] Discord shard unavailable for guild ${guildId}`);
+        return;
+      }
+      shard.send(payload);
+    },
     client: { id: process.env.DISCORD_CLIENT_ID || "", username: "The Z" },
     autoSkip: true,
     linksAllowed: true,
