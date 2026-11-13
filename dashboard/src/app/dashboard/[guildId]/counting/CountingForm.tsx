@@ -80,6 +80,7 @@ export default function CountingForm({ guildId, initial, channels, initialStats 
       <p className="rounded-lg bg-[#22241C] p-3 text-sm leading-6 text-slate-400">
         الأرقام العربية والإنجليزية والمسائل الحسابية مقبولة، مثل 2 + 3 أو (8 ÷ 2) × 3. تشمل العمليات الجمع والطرح والضرب والقسمة الصحيحة والباقي والأسس والأقواس. يضيف البوت علامة صح للعدد الصحيح. الرقم الخاطئ يُحذف دائمًا؛ الرسائل النصية لا تعيد الجولة، ويمكنك اختيار حذفها.
       </p>
+      <p className="text-xs text-slate-500">إذا حُذفت إجابة صحيحة من الجولة الحالية، يرجع العد إليها ويحذف الإجابات اللاحقة التي لم تعد متسلسلة.</p>
     </section>
 
     <div className="flex flex-wrap items-center gap-4">

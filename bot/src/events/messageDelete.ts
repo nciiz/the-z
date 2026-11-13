@@ -1,11 +1,13 @@
 import { AuditLogEvent, EmbedBuilder, Message, PartialMessage } from "discord.js";
 import { BotEvent } from "../types/event";
 import { sendLog, sendMediaLog } from "../modules/logging/logger";
+import { handleCountingMessageDeletion } from "../modules/counting/countingManager";
 
 const event: BotEvent = {
   name: "messageDelete",
   async execute(client, message: Message | PartialMessage) {
     if (!message.guild || message.author?.bot) return;
+    await handleCountingMessageDeletion(message.guild, message.channelId, [message.id]);
 
     let executor: any = null;
     let auditEntry: any = null;

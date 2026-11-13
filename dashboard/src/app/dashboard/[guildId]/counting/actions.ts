@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { CountingState, GuildConfig, IGuildConfig } from "@thez/shared";
+import { randomUUID } from "node:crypto";
+import { CountingEntry, CountingState, GuildConfig, IGuildConfig } from "@thez/shared";
 import { ensureDb } from "@/lib/db";
 import { requireGuildAdmin } from "@/lib/guildAccess";
 import { getGuildChannels, sendChannelMessage } from "@/lib/discord";
@@ -38,8 +39,11 @@ export async function saveCountingConfig(guildId: string, input: IGuildConfig["c
   if (oldCounting?.channelId !== data.channelId || oldCounting?.startingNumber !== data.startingNumber) {
     const state = await CountingState.findOne({ guildId });
     if (state) {
+      const entries = await CountingEntry.find({ guildId, roundId: state.roundId });
+      for (const entry of entries) await CountingEntry.deleteOne({ guildId, messageId: entry.messageId }).catch(() => null);
       state.channelId = data.channelId ?? "";
       state.startingNumber = data.startingNumber;
+      state.roundId = randomUUID();
       state.nextNumber = data.startingNumber;
       state.lastUserId = undefined;
       state.resetCount = (state.resetCount ?? 0) + 1;
@@ -68,8 +72,13 @@ export async function resetCountingGame(guildId: string) {
   const counting = config?.counting;
   const start = validStart(counting?.startingNumber) ? counting.startingNumber : 1;
   const channelId = counting?.channelId ?? "";
+  const previous = await CountingState.findOne({ guildId });
+  if (previous?.roundId) {
+    const entries = await CountingEntry.find({ guildId, roundId: previous.roundId });
+    for (const entry of entries) await CountingEntry.deleteOne({ guildId, messageId: entry.messageId }).catch(() => null);
+  }
   const state = await CountingState.findOneAndUpdate({ guildId }, {
-    $set: { guildId, channelId, startingNumber: start, nextNumber: start, lastUserId: undefined, updatedAt: new Date() },
+    $set: { guildId, channelId, startingNumber: start, roundId: randomUUID(), nextNumber: start, lastUserId: undefined, updatedAt: new Date() },
     $inc: { resetCount: 1 }
   }, { upsert: true });
 

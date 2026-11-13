@@ -1,6 +1,7 @@
 import { AuditLogEvent, EmbedBuilder, Collection, Message } from "discord.js";
 import { BotEvent } from "../types/event";
 import { sendLog } from "../modules/logging/logger";
+import { handleCountingMessageDeletion } from "../modules/counting/countingManager";
 
 const event: BotEvent = {
   name: "messageDeleteBulk",
@@ -9,6 +10,7 @@ const event: BotEvent = {
     if (!firstMessage?.guild) return;
     const guild = firstMessage.guild;
     const channelId = firstMessage.channelId;
+    await handleCountingMessageDeletion(guild, channelId, [...messages.keys()]);
     const channel = firstMessage.channel as any;
     const channelName = channel?.name || "Unknown";
 

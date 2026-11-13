@@ -13,3 +13,4 @@ export * from "./models/ActionLog";
 export * from "./models/ServerTemplate";
 export * from "./models/LogEntry";
 export * from "./models/CountingState";
+export * from "./models/CountingEntry";

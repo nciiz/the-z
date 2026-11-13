@@ -1,5 +1,7 @@
-import { Message, TextChannel } from "discord.js";
-import { CountingState } from "@thez/shared";
+import { Guild, Message, TextChannel } from "discord.js";
+import { randomUUID } from "node:crypto";
+import { CountingEntry, CountingState } from "@thez/shared";
+import type { ICountingState, LiveDoc } from "@thez/shared";
 import { logError } from "../../utils/logger";
 
 const guildQueues = new Map<string, Promise<void>>();
@@ -99,11 +101,33 @@ function evaluateCountingAnswer(raw: string): { isMath: boolean; value: number |
   }
 }
 
-async function sendTemporaryNotice(message: Message, content: string): Promise<void> {
-  const channel = await message.guild?.channels.fetch(message.channelId).catch(() => null);
+async function sendTemporaryNotice(guild: Guild, channelId: string, content: string): Promise<void> {
+  const channel = await guild.channels.fetch(channelId).catch(() => null);
   if (!channel?.isTextBased()) return;
   const notice = await (channel as TextChannel).send({ content }).catch(() => null);
   if (notice) setTimeout(() => notice.delete().catch(() => null), 7_000);
+}
+
+async function clearRoundEntries(guildId: string, roundId: string): Promise<void> {
+  if (!roundId) return;
+  const entries = await CountingEntry.find({ guildId, roundId });
+  for (const entry of entries) {
+    await CountingEntry.deleteOne({ guildId, messageId: entry.messageId }).catch(() => null);
+  }
+}
+
+async function startNewRound(
+  state: LiveDoc<ICountingState>,
+  channelId: string,
+  startingNumber: number
+): Promise<void> {
+  await clearRoundEntries(state.guildId, state.roundId);
+  state.channelId = channelId;
+  state.startingNumber = startingNumber;
+  state.roundId = randomUUID();
+  state.nextNumber = startingNumber;
+  state.lastUserId = undefined;
+  state.updatedAt = new Date();
 }
 
 /**
@@ -126,19 +150,16 @@ export async function handleCountingMessage(message: Message, rawConfig: any): P
         guildId: message.guildId!,
         channelId: config.channelId,
         startingNumber,
+        roundId: randomUUID(),
         nextNumber: startingNumber,
         totalCorrect: 0,
         bestCount: 0,
         resetCount: 0,
         updatedAt: new Date()
       });
-    } else if (state.channelId !== config.channelId || state.startingNumber !== startingNumber) {
-      state.channelId = config.channelId;
-      state.startingNumber = startingNumber;
-      state.nextNumber = startingNumber;
-      state.lastUserId = undefined;
+    } else if (!state.roundId || state.channelId !== config.channelId || state.startingNumber !== startingNumber) {
+      await startNewRound(state, config.channelId, startingNumber);
       state.resetCount += 1;
-      state.updatedAt = new Date();
       await state.save();
     }
 
@@ -155,29 +176,42 @@ export async function handleCountingMessage(message: Message, rawConfig: any): P
 
     if (correct) {
       const countInRound = value - startingNumber + 1;
+      await CountingEntry.create({
+        guildId: message.guildId!,
+        channelId: message.channelId,
+        roundId: state.roundId,
+        messageId: message.id,
+        value,
+        userId: message.author.id,
+        previousUserId: state.lastUserId,
+        createdAt: new Date()
+      });
       state.nextNumber = value + 1;
       state.lastUserId = message.author.id;
       state.totalCorrect += 1;
       state.bestCount = Math.max(state.bestCount, countInRound);
       state.updatedAt = new Date();
-      await state.save();
+      try {
+        await state.save();
+      } catch (error) {
+        await CountingEntry.deleteOne({ guildId: message.guildId!, messageId: message.id }).catch(() => null);
+        throw error;
+      }
       await message.react("✅").catch((error) => logError("counting/reaction", error));
       return;
     }
 
     await message.delete().catch(() => null);
     if (config.resetOnWrong !== false) {
-      state.nextNumber = startingNumber;
-      state.lastUserId = undefined;
+      await startNewRound(state, config.channelId, startingNumber);
       state.resetCount += 1;
-      state.updatedAt = new Date();
       await state.save();
       const detail = consecutive
         ? "لا يمكن للعضو نفسه العد مرتين متتاليتين."
         : `الرقم الصحيح كان ${expectedNumber}.`;
-      await sendTemporaryNotice(message, `${detail} أُعيد العد إلى ${startingNumber}.`);
+      await sendTemporaryNotice(message.guild!, message.channelId, `${detail} أُعيد العد إلى ${startingNumber}.`);
     } else {
-      await sendTemporaryNotice(message, consecutive
+      await sendTemporaryNotice(message.guild!, message.channelId, consecutive
         ? "انتظر حتى يكتب عضو آخر قبل أن تعد مرة أخرى."
         : `الرقم التالي المطلوب هو ${state.nextNumber}.`);
     }
@@ -186,4 +220,50 @@ export async function handleCountingMessage(message: Message, rawConfig: any): P
   });
 
   return true;
+}
+
+/** يرجّع التسلسل إذا حُذفت إجابة صحيحة، ويحذف الإجابات اللاحقة التي تعتمد عليها. */
+export async function handleCountingMessageDeletion(
+  guild: Guild,
+  channelId: string,
+  deletedMessageIds: string[]
+): Promise<void> {
+  if (!deletedMessageIds.length) return;
+  await withGuildQueue(guild.id, async () => {
+    const state = await CountingState.findOne({ guildId: guild.id });
+    if (!state?.roundId || state.channelId !== channelId) return;
+
+    const deletedIds = new Set(deletedMessageIds);
+    const deletedEntries = (await CountingEntry.find({ guildId: guild.id, messageId: { $in: [...deletedIds] } }))
+      .filter((entry) => entry.roundId === state.roundId && entry.channelId === channelId)
+      .sort((a, b) => a.value - b.value);
+    if (!deletedEntries.length) return;
+
+    const entries = await CountingEntry.find({ guildId: guild.id, roundId: state.roundId }).sort({ value: 1 });
+    const earliestDeleted = deletedEntries[0];
+    const invalidatedEntries = entries.filter((entry) => entry.value >= earliestDeleted.value);
+    state.nextNumber = earliestDeleted.value;
+    state.lastUserId = earliestDeleted.previousUserId;
+    state.totalCorrect = Math.max(0, state.totalCorrect - invalidatedEntries.length);
+    state.resetCount += 1;
+    state.updatedAt = new Date();
+    await state.save();
+
+    // امسح السجلات أولاً حتى لا تؤدي أحداث حذف الرسائل اللاحقة إلى rollback إضافي.
+    for (const entry of invalidatedEntries) {
+      await CountingEntry.deleteOne({ guildId: guild.id, messageId: entry.messageId }).catch(() => null);
+    }
+
+    const channel = await guild.channels.fetch(channelId).catch(() => null);
+    if (channel?.isTextBased()) {
+      const textChannel = channel as TextChannel;
+      for (const entry of invalidatedEntries) {
+        if (deletedIds.has(entry.messageId)) continue;
+        const message = await textChannel.messages.fetch(entry.messageId).catch(() => null);
+        if (message) await message.delete().catch(() => null);
+      }
+      await sendTemporaryNotice(guild, channelId,
+        `حُذفت إجابة صحيحة؛ أُلغيت الأرقام اللاحقة. الرقم المطلوب الآن هو ${earliestDeleted.value}.`);
+    }
+  }).catch((error) => logError("counting/deleted-message", error));
 }
