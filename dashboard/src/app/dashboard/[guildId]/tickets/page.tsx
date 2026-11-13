@@ -1,5 +1,5 @@
 import { ensureDb } from "@/lib/db";
-import { GuildConfig, IGuildConfig } from "@thez/shared";
+import { GuildConfig, IGuildConfig, ITicketCategory } from "@thez/shared";
 import { getGuildChannels, getGuildRoles } from "@/lib/discord";
 import TicketsForm from "./TicketsForm";
 
@@ -22,7 +22,7 @@ export default async function TicketsPage({ params }: { params: { guildId: strin
     transcriptChannelId: config?.tickets?.transcriptChannelId ?? "",
     saveTranscriptAsHtml: config?.tickets?.saveTranscriptAsHtml ?? true,
     maxOpenPerUser: config?.tickets?.maxOpenPerUser ?? 1,
-    categories: (config?.tickets?.categories ?? []).map((category) => ({
+    categories: (config?.tickets?.categories ?? []).map((category: ITicketCategory) => ({
       ...category,
       staffRoleIds: category.staffRoleIds ?? [],
       blockedRoleIds: category.blockedRoleIds ?? [],
