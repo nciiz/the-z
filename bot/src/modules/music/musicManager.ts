@@ -18,7 +18,7 @@ interface QueueItem { track: MusicTrack; textChannelId: string; requestedBy: str
 interface GuildPlayer { player: AudioPlayer; queue: QueueItem[]; connection: VoiceConnection; stream?: Readable; controller?: AbortController; starting: boolean; current?: QueueItem; }
 const sessions = new Map<string, GuildPlayer>();
 
-export async function searchTracks(query: string): Promise<MusicTrack[]> {
+async function requestTracks(parameters: Record<string, string>): Promise<MusicTrack[]> {
   const clientId = process.env.JAMENDO_CLIENT_ID?.trim();
   if (!clientId) throw new Error("MISSING_JAMENDO_CLIENT_ID");
   const url = new URL("https://api.jamendo.com/v3.0/tracks/");
@@ -26,16 +26,32 @@ export async function searchTracks(query: string): Promise<MusicTrack[]> {
     client_id: clientId,
     format: "json",
     limit: "10",
-    search: query.slice(0, 120),
     audioformat: "mp32",
     include: "licenses",
-    order: "popularity_total"
+    ...parameters
   }).toString();
   const response = await fetch(url, { signal: AbortSignal.timeout(12_000) });
   if (!response.ok) throw new Error(`JAMENDO_HTTP_${response.status}`);
   const payload = await response.json() as { headers?: { status?: string }; results?: MusicTrack[] };
   if (payload.headers?.status !== "success") throw new Error("JAMENDO_API_ERROR");
   return (payload.results ?? []).filter((track) => track.audio && track.name && track.artist_name && track.shareurl);
+}
+
+export async function searchTracks(query: string): Promise<MusicTrack[]> {
+  return requestTracks({ search: query.slice(0, 120) });
+}
+
+export async function getTrackFromLink(link: string): Promise<MusicTrack | null> {
+  let parsed: URL;
+  try { parsed = new URL(link); } catch { return null; }
+  const host = parsed.hostname.toLowerCase();
+  if (parsed.protocol !== "https:" || !(host === "jamendo.com" || host.endsWith(".jamendo.com"))) {
+    throw new Error("UNSUPPORTED_AUDIO_LINK");
+  }
+  const match = parsed.pathname.match(/^\/track\/(\d+)(?:\/|$)/);
+  if (!match) throw new Error("UNSUPPORTED_AUDIO_LINK");
+  const tracks = await requestTracks({ id: match[1], limit: "1" });
+  return tracks[0] ?? null;
 }
 
 function formatDuration(seconds: number): string {
