@@ -51,6 +51,7 @@ export function initializeLavalink(client: ExtendedClient): void {
     console.warn("[music/lavalink] Node error:", error.message);
   });
   manager.on("trackStart", async (player, track) => {
+    if (!track || !player.textChannelId) return;
     const channel = client.channels.cache.get(player.textChannelId) as TextChannel | undefined;
     if (!channel?.isTextBased() || !("send" in channel)) return;
     const title = track.info.title.slice(0, 240);
@@ -69,7 +70,7 @@ export function initializeLavalink(client: ExtendedClient): void {
   });
 }
 
-function formatDuration(milliseconds: number): string {
+function formatDuration(milliseconds?: number | null): string {
   if (!Number.isFinite(milliseconds) || milliseconds <= 0) return "بث مباشر";
   const totalSeconds = Math.floor(milliseconds / 1000);
   return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, "0")}`;
