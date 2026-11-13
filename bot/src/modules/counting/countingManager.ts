@@ -1,4 +1,4 @@
-import { Message } from "discord.js";
+import { Message, TextChannel } from "discord.js";
 import { CountingState } from "@thez/shared";
 import { logError } from "../../utils/logger";
 
@@ -26,7 +26,9 @@ function normalizeDigits(value: string): string {
 }
 
 async function sendTemporaryNotice(message: Message, content: string): Promise<void> {
-  const notice = await message.channel.send({ content }).catch(() => null);
+  const channel = await message.guild?.channels.fetch(message.channelId).catch(() => null);
+  if (!channel?.isTextBased()) return;
+  const notice = await (channel as TextChannel).send({ content }).catch(() => null);
   if (notice) setTimeout(() => notice.delete().catch(() => null), 7_000);
 }
 
