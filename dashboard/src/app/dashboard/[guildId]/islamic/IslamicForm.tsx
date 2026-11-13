@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import { DiscordChannel } from "@/lib/discord";
 import Toggle from "@/components/form/Toggle";
 import ChannelSelect from "@/components/form/ChannelSelect";
@@ -96,6 +97,13 @@ export default function IslamicForm({
             />
           </div>
         </div>
+
+        {state.channelId && !channels.some((channel) => channel.id === state.channelId) && (
+          <div role="alert" className="flex items-start gap-2 rounded-lg border border-[#8a6546]/40 bg-[#8a6546]/10 p-3 text-sm">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+            <span>القناة المحفوظة غير متاحة للبوت. اختر قناة موجودة واحفظ الإعدادات؛ سيتوقف النشر التلقائي حتى اختيار قناة صالحة.</span>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <MultiSelect

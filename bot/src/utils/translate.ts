@@ -6,6 +6,7 @@ const CACHE_TTL_MS = 5 * 60_000;
 const CACHE_MAX_ENTRIES = 500;
 const MAX_INPUT_LENGTH = 4_000;
 const translationCache = new Map<string, { value: string; expiresAt: number }>();
+const providerCooldowns = new Map<string, { until: number; failures: number }>();
 
 function detectSourceLanguage(text: string): "ar" | "en" {
   const arabic = (text.match(/[\u0600-\u06FF]/g) ?? []).length;
@@ -100,6 +101,24 @@ async function translateWithFallback(text: string, target: "ar" | "en"): Promise
   return translated || null;
 }
 
+function providerFailureStatus(error: unknown): number | null {
+  const message = error instanceof Error ? error.message : String(error);
+  const match = message.match(/(?:HTTP\s+|status:\s*)(\d{3})/i);
+  return match ? Number(match[1]) : null;
+}
+
+function coolDownProvider(provider: string, error: unknown): void {
+  const status = providerFailureStatus(error);
+  if (status !== 401 && status !== 429) return;
+  const previous = providerCooldowns.get(provider)?.failures ?? 0;
+  const failures = previous + 1;
+  // Bing 401 here is the upstream CAPTCHA response; avoid retrying it on every message.
+  const duration = status === 401
+    ? 30 * 60_000
+    : Math.min(30 * 60_000, 60_000 * 2 ** Math.min(failures - 1, 5));
+  providerCooldowns.set(provider, { until: Date.now() + duration, failures });
+}
+
 /** Arabic ↔ English translation with bounded caching and three sequential providers. */
 export async function translateText(text: string, targetLang?: string): Promise<string | null> {
   const input = text.trim().slice(0, MAX_INPUT_LENGTH);
@@ -119,12 +138,16 @@ export async function translateText(text: string, targetLang?: string): Promise<
   ] as const;
 
   for (const [provider, run] of providers) {
+    const cooldown = providerCooldowns.get(provider);
+    if (cooldown && cooldown.until > Date.now()) continue;
     try {
       const translated = await run();
       if (!translated) continue;
+      providerCooldowns.delete(provider);
       cacheSet(key, translated);
       return translated;
     } catch (error) {
+      coolDownProvider(provider, error);
       logError(`translate/${provider}`, error);
     }
   }

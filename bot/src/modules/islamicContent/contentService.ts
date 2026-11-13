@@ -195,6 +195,11 @@ export type PostResult =
   | { ok: true; item: ContentItem }
   | { ok: false; reason: "no-channel" | "channel-not-found" | "no-content" | "error" };
 
+function isUnknownChannelError(error: unknown): boolean {
+  const value = error as { code?: number | string; message?: string } | null;
+  return value?.code === 10003 || value?.code === "10003" || /unknown channel/i.test(value?.message ?? "");
+}
+
 /**
  * نشر عنصر محتوى في قناة السيرفر.
  * لا يُوقف البوت في أي حال — أي فشل يُسجل ويُعاد بشكل طبيعي مع الدورة التالية.
@@ -214,17 +219,11 @@ export async function postIslamicContent(
     const item = await pickContent(config, excludeIds);
     if (!item) return { ok: false, reason: "no-content" };
 
-    try {
-      await channel.send({ embeds: [buildIslamicEmbed(item)] });
-    } catch (err: any) {
-      // Unknown Channel (10003) — القناة محذوفة أو البوت لا يراها
-      if (err?.code === 10003 || err?.message?.includes("10003") || err?.message?.includes("Unknown Channel")) {
-        return { ok: false, reason: "channel-not-found" };
-      }
-      throw err;
-    }
+    await channel.send({ embeds: [buildIslamicEmbed(item)] });
     return { ok: true, item };
   } catch (err) {
+    // Discord may reject the initial fetch, before the send call is reached.
+    if (isUnknownChannelError(err)) return { ok: false, reason: "channel-not-found" };
     logError("islamic/post", err);
     return { ok: false, reason: "error" };
   }

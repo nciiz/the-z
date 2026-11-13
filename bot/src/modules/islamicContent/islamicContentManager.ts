@@ -83,8 +83,18 @@ export async function runForGuild(client: ExtendedClient, guildId: string): Prom
       );
       invalidateGuildConfigCache(client, guildId);
     } else {
-      // لا نوقف الجدولة عند الفشل — نعيد المحاولة في الدورة التالية
-      config.nextRunAt = computeNextRunAt(config.intervalMinutes);
+      if (result.reason === "channel-not-found") {
+        // A deleted channel will never recover; pause this module until an admin picks a valid channel.
+        config.enabled = false;
+        config.nextRunAt = undefined;
+        logError(
+          `islamic/channel-invalid/${guildId}`,
+          new Error(`Configured channel ${config.channelId} no longer exists. Islamic posting was paused.`)
+        );
+      } else {
+        // Temporary errors keep their normal retry schedule.
+        config.nextRunAt = computeNextRunAt(config.intervalMinutes);
+      }
       recordDbWrite();
       await GuildConfig.findOneAndUpdate(
         { guildId },
