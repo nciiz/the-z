@@ -7,23 +7,6 @@ import { releaseJailedMember } from "../modules/jail/expiry";
 import { recordModerationLog } from "../modules/moderation/auditLog";
 import { translateText } from "../utils/translate";
 
-// ذاكرة مؤقتة للترجمات — محدودة الحجم لمنع نمو غير محدود
-const translationCache = new Map<string, { text: string; timestamp: number }>();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 دقائق
-const CACHE_MAX_ENTRIES = 500;
-
-function cacheSet(key: string, value: { text: string; timestamp: number }): void {
-  if (translationCache.size >= CACHE_MAX_ENTRIES) {
-    const oldest = translationCache.keys().next().value;
-    if (oldest !== undefined) translationCache.delete(oldest);
-    const now = Date.now();
-    for (const [k, v] of translationCache) {
-      if (now - v.timestamp >= CACHE_DURATION) translationCache.delete(k);
-    }
-  }
-  translationCache.set(key, value);
-}
-
 /**
  * يعالج الأوامر ذات البادئة الثابتة (`,tr | ,afk | ,avatar | ,banner | ,jail | ,unjail`).
  * يُرجع `true` إذا تمّت معالجة الرسالة ويجب إيقاف المعالجة اللاحقة.
@@ -35,38 +18,19 @@ export async function handleLegacyPrefixCommands(
   const content = message.content;
 
   // ────── ,tr ── ترجمة ──────────────────────────────────────────────────────
-  if (content.startsWith(",tr")) {
+  if (/^,tr(?:\s|$)/i.test(content)) {
     const referencedMessage = message.reference?.messageId
       ? await message.channel.messages.fetch(message.reference.messageId).catch(() => null)
       : null;
 
-    let text = referencedMessage?.content || "";
-
-    if (!text) {
-      text = content.slice(3).trim();
-    }
+    let text = content.slice(3).trim() || referencedMessage?.content?.trim() || "";
 
     if (!text) {
       await message.reply("يجب تحديد رسالة لترجمتها (رد على رسالة واستخدم ,tr)");
       return true;
     }
 
-    const isArabic = /[\u0600-\u06FF]/.test(text);
-    const targetLang = isArabic ? "en" : "ar";
-    const cacheKey = `${text.substring(0, 100)}_${targetLang}`;
-    const cached = translationCache.get(cacheKey);
-    const now = Date.now();
-
-    if (cached && now - cached.timestamp < CACHE_DURATION) {
-      const display = cached.text.length > 4096 ? cached.text.substring(0, 4093) + "..." : cached.text;
-      await message.reply({
-        embeds: [new EmbedBuilder().setColor(config.defaultColor).setDescription(display)]
-      });
-      return true;
-    }
-
-    // ترجمة موحدة عبر DeepL ثم Bing
-    const translated = await translateText(text, targetLang);
+    const translated = await translateText(text);
 
     if (!translated?.trim()) {
       await message.reply("فشلت الترجمة، حاول مرة أخرى");
@@ -74,7 +38,6 @@ export async function handleLegacyPrefixCommands(
     }
 
     const finalText = translated.length > 4096 ? translated.substring(0, 4093) + "..." : translated;
-    cacheSet(cacheKey, { text: translated, timestamp: now });
 
     await message.reply({
       embeds: [new EmbedBuilder().setColor(config.defaultColor).setDescription(finalText)]

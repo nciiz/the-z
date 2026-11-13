@@ -93,7 +93,7 @@ export default function AccessManager({
               <div className="flex items-center gap-3">
                 <span className="font-mono text-sm font-medium">{id}</span>
                 {id === ownerId && (
-                  <span className="rounded-full bg-[#5865F2] px-2 py-0.5 text-xs font-bold text-white">المالك</span>
+                  <span className="rounded-full bg-[#315C43] px-2 py-0.5 text-xs font-bold text-white">المالك</span>
                 )}
               </div>
               {id !== ownerId ? (

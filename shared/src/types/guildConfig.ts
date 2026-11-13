@@ -118,7 +118,7 @@ export interface ISelfRolePanel {
   maxRoles?: number;
   /** معطّل = لا تستجيب اللوحة للنقر ولا تُعرض في النشر */
   enabled?: boolean;
-  /** لون الـ Embed (hex مثل #5865F2) */
+  /** لون الـ Embed (hex مثل #315C43) */
   color?: string;
   options: ISelfRoleOption[];
 }
@@ -422,6 +422,8 @@ export interface IGuildConfig {
   movies: {
     enabled: boolean;
     channelId: string | null;
+    /** مدة صلاحية قائمة اختيار نتيجة الفيلم بالثواني (30–3600، الافتراضي 300) */
+    selectionTimeoutSeconds: number;
   };
 
   /** لوحة النجوم Starboard */
@@ -517,7 +519,7 @@ function defaultCustomMessage(): ICustomMessage {
       enabled: false,
       title: "",
       description: "",
-      color: "#5865F2",
+      color: "#315C43",
       thumbnail: true,
       image: "",
       footer: "",
@@ -678,7 +680,8 @@ export function createDefaultGuildConfig(guildId: string): IGuildConfig {
 
     movies: {
       enabled: false,
-      channelId: null
+      channelId: null,
+      selectionTimeoutSeconds: 300
     },
 
     starboard: {
@@ -701,7 +704,7 @@ export function createDefaultGuildConfig(guildId: string): IGuildConfig {
       autoThread: false,
       backgroundImage: "",
       imageTitle: "اقتراح جديد",
-      imageTitleColor: "#5865f2",
+      imageTitleColor: "#315c43",
       usernameColor: "#ffffff",
       tagColor: "#b9bbbe",
       contentColor: "#ffffff",

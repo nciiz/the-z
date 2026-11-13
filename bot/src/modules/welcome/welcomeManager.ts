@@ -3,6 +3,7 @@ import { createCanvas, loadImage } from "@napi-rs/canvas";
 import { IGuildConfig, VariableContext } from "@thez/shared";
 import { ExtendedClient } from "../../client";
 import { buildMessageFromCustom } from "../../utils/embed";
+import { ensureFontLoaded } from "../../utils/fonts";
 
 function pad(num: number): string {
   return num.toString().padStart(2, "0");
@@ -42,12 +43,16 @@ async function generateImage(
   const height = 400;
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
+  const fontName = await ensureFontLoaded();
 
   let hasBackgroundImage = false;
   if (background && (background.startsWith("data:image/") || /^https?:\/\//i.test(background))) {
     try {
       const bgImage = await loadImage(background);
-      ctx.drawImage(bgImage, 0, 0, width, height);
+      const scale = Math.max(width / bgImage.width, height / bgImage.height);
+      const drawWidth = bgImage.width * scale;
+      const drawHeight = bgImage.height * scale;
+      ctx.drawImage(bgImage, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
       hasBackgroundImage = true;
     } catch {
       hasBackgroundImage = false;
@@ -56,19 +61,34 @@ async function generateImage(
 
   if (!hasBackgroundImage) {
     const gradient = ctx.createLinearGradient(0, 0, width, height);
-    gradient.addColorStop(0, "#1e1b4b");
-    gradient.addColorStop(1, "#5865f2");
+    gradient.addColorStop(0, "#14271C");
+    gradient.addColorStop(0.58, "#315C43");
+    gradient.addColorStop(1, "#3A2B20");
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
   }
 
-  // طبقة تعتيم خفيفة لتحسين وضوح النص فوق الخلفية
-  ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+  // تدرّج تعتيم يحافظ على وضوح النص فوق الخلفية المختارة.
+  const shade = ctx.createLinearGradient(0, 0, 0, height);
+  shade.addColorStop(0, "rgba(10, 17, 12, 0.50)");
+  shade.addColorStop(1, "rgba(10, 17, 12, 0.76)");
+  ctx.fillStyle = shade;
   ctx.fillRect(0, 0, width, height);
 
-  const avatarSize = 180;
+  ctx.strokeStyle = "rgba(217, 201, 166, 0.62)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(22, 22, width - 44, height - 44, 24);
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(20, 31, 23, 0.60)";
+  ctx.beginPath();
+  ctx.roundRect(245, 42, 510, 316, 28);
+  ctx.fill();
+
+  const avatarSize = 148;
   const avatarX = width / 2 - avatarSize / 2;
-  const avatarY = 45;
+  const avatarY = 50;
 
   try {
     const avatarURL = member.displayAvatarURL({ extension: "png", size: 256 });
@@ -77,7 +97,7 @@ async function generateImage(
     ctx.save();
     ctx.beginPath();
     ctx.arc(width / 2, avatarY + avatarSize / 2, avatarSize / 2 + 6, 0, Math.PI * 2);
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = "#F4EFE2";
     ctx.fill();
     ctx.closePath();
 
@@ -92,15 +112,22 @@ async function generateImage(
   }
 
   ctx.textAlign = "center";
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 42px sans-serif";
-  const title = type === "welcome" ? "أهلاً بك" : "وداعاً";
-  ctx.fillText(`${title} ${member.user.username}`, width / 2, avatarY + avatarSize + 60);
+  ctx.fillStyle = "#D9C9A6";
+  ctx.font = `bold 16px ${fontName}`;
+  ctx.fillText("THE Z  /  COMMUNITY", width / 2, 38);
 
-  ctx.font = "28px sans-serif";
-  ctx.fillStyle = "#e0e0e0";
+  ctx.fillStyle = "#F4EFE2";
+  ctx.font = `bold 38px ${fontName}`;
+  const title = type === "welcome" ? "أهلاً بك" : "نراك لاحقاً";
+  const titleText = `${title}، ${member.displayName || member.user.username}`;
+  ctx.fillText(titleText.length > 32 ? `${titleText.slice(0, 30)}…` : titleText, width / 2, avatarY + avatarSize + 50);
+
+  ctx.font = `20px ${fontName}`;
+  ctx.fillStyle = "#E1D8C6";
   ctx.fillText(
-    `عضو رقم ${member.guild.memberCount} في ${member.guild.name}`,
+    type === "welcome"
+      ? `العضو رقم ${member.guild.memberCount} في ${member.guild.name}`
+      : `شكراً لكونك جزءاً من ${member.guild.name}`,
     width / 2,
     avatarY + avatarSize + 105
   );

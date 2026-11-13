@@ -173,7 +173,7 @@ export async function pickContent(
 /** تنسيق الإيمبد النهائي — لا إيموجي، المصدر ظاهر دائمًا */
 export function buildIslamicEmbed(item: ContentItem): EmbedBuilder {
   const embed = new EmbedBuilder()
-    .setColor(0x5865f2)
+    .setColor(0x315c43)
     .setTitle(item.title)
     .setDescription(truncate(item.text));
 

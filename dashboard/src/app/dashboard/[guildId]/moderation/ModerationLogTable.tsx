@@ -61,12 +61,12 @@ export function ModerationLogTable({ logs }: { logs: ModerationLogRow[] }) {
           placeholder="بحث بالآيدي أو السبب…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="flex-1 rounded-lg border border-[#2A2D37] bg-[#121318] px-3 py-2 text-sm text-[#F0F0F0] placeholder-[#6B7280] outline-none focus:border-[#5865F2]"
+          className="flex-1 rounded-lg border border-[#393B30] bg-[#191B15] px-3 py-2 text-sm text-[#F4EFE2] placeholder-[#6B7280] outline-none focus:border-[#315C43]"
         />
         <select
           value={action}
           onChange={(e) => setAction(e.target.value)}
-          className="rounded-lg border border-[#2A2D37] bg-[#121318] px-3 py-2 text-sm text-[#F0F0F0] outline-none focus:border-[#5865F2]"
+          className="rounded-lg border border-[#393B30] bg-[#191B15] px-3 py-2 text-sm text-[#F4EFE2] outline-none focus:border-[#315C43]"
         >
           <option value="all">كل الإجراءات</option>
           {Object.entries(ACTION_LABELS).map(([value, label]) => (
@@ -85,7 +85,7 @@ export function ModerationLogTable({ logs }: { logs: ModerationLogRow[] }) {
         <div className="overflow-x-auto">
           <table className="w-full text-right text-sm">
             <thead>
-              <tr className="border-b border-[#2A2D37] text-[#9CA3AF]">
+              <tr className="border-b border-[#393B30] text-[#B8B09D]">
                 <th className="px-3 py-2 font-medium">الإجراء</th>
                 <th className="px-3 py-2 font-medium">العضو</th>
                 <th className="px-3 py-2 font-medium">بواسطة</th>
@@ -95,19 +95,19 @@ export function ModerationLogTable({ logs }: { logs: ModerationLogRow[] }) {
             </thead>
             <tbody>
               {filtered.map((l) => (
-                <tr key={l.id ?? `${l.userId}-${l.createdAt}`} className="border-b border-[#1A1C23] text-[#F0F0F0]">
+                <tr key={l.id ?? `${l.userId}-${l.createdAt}`} className="border-b border-[#22241C] text-[#F4EFE2]">
                   <td className="px-3 py-2">
-                    <span className="rounded-md bg-[#1A1C23] px-2 py-0.5 text-xs font-medium text-[#9CA3AF]">
+                    <span className="rounded-md bg-[#22241C] px-2 py-0.5 text-xs font-medium text-[#B8B09D]">
                       {actionLabel(l.action)}
                     </span>
                   </td>
                   <td className="px-3 py-2 font-mono text-xs">{l.userId}</td>
                   <td className="px-3 py-2 font-mono text-xs">{l.moderatorId}</td>
-                  <td className="max-w-[260px] truncate px-3 py-2 text-xs text-[#9CA3AF]">
+                  <td className="max-w-[260px] truncate px-3 py-2 text-xs text-[#B8B09D]">
                     {l.durationMinutes ? `المدة: ${l.durationMinutes} دقيقة — ` : ""}
                     {l.reason}
                   </td>
-                  <td className="px-3 py-2 text-xs text-[#9CA3AF]">
+                  <td className="px-3 py-2 text-xs text-[#B8B09D]">
                     {new Date(l.createdAt).toLocaleString("ar-EG")}
                   </td>
                 </tr>

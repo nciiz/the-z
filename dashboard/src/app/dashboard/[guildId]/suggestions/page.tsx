@@ -26,7 +26,7 @@ export default async function SuggestionsPage({ params }: { params: { guildId: s
     autoThread: Boolean(suggestionConfig.autoThread),
     backgroundImage: suggestionConfig.backgroundImage ?? "",
     imageTitle: suggestionConfig.imageTitle ?? "اقتراح جديد",
-    imageTitleColor: suggestionConfig.imageTitleColor ?? "#5865f2",
+    imageTitleColor: suggestionConfig.imageTitleColor ?? "#315c43",
     usernameColor: suggestionConfig.usernameColor ?? "#ffffff",
     tagColor: suggestionConfig.tagColor ?? "#b9bbbe",
     contentColor: suggestionConfig.contentColor ?? "#ffffff",

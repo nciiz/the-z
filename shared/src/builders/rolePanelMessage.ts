@@ -19,7 +19,7 @@ export interface RolePanelMessagePayload {
   components: Array<{ type: 1; components: unknown[] }>;
 }
 
-const DEFAULT_COLOR = 0x5865f2;
+const DEFAULT_COLOR = 0x315c43;
 const BUTTON_PREFIX = "selfrole_btn_";
 const SELECT_PREFIX = "selfrole_select_";
 

@@ -20,10 +20,10 @@ export default async function LoginPage() {
         <img
           src="/bot-logo.jpg"
           alt="شعار البوت"
-          className="h-16 w-16 rounded-full object-cover shadow-lg ring-2 ring-[#5865F2]/40"
+          className="h-16 w-16 rounded-full object-cover shadow-lg ring-2 ring-[#315C43]/40"
         />
-        <h1 className="text-3xl font-bold text-[#F0F0F0]">تسجيل الدخول</h1>
-        <p className="max-w-md text-base text-[#9CA3AF]">
+        <h1 className="text-3xl font-bold text-[#F4EFE2]">تسجيل الدخول</h1>
+        <p className="max-w-md text-base text-[#B8B09D]">
           جلسة الدخول انتهت أو فشل تجديدها — سجّل الدخول مجددًا للمتابعة
         </p>
       </div>

@@ -19,6 +19,11 @@ const command: BotCommand = {
   async run(ctx) {
     const gConfig = await getGuildConfig(ctx.client, ctx.guild.id);
 
+    if (!gConfig.tickets.enabled) {
+      await ctx.reply("نظام التذاكر غير مفعّل. فعّله من لوحة التحكم أولاً.");
+      return;
+    }
+
     if (!gConfig.tickets.categories.length) {
       await ctx.reply("لا توجد تصنيفات تذاكر معرّفة بعد. أضِف تصنيفاً واحداً على الأقل من لوحة التحكم أولاً.");
       return;

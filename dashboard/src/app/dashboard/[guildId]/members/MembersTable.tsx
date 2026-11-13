@@ -231,7 +231,7 @@ export default function MembersTable({ guildId }: MembersTableProps) {
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-4">
         <div className="relative flex-1">
-          <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
+          <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#B8B09D]" />
           <input
             type="text"
             placeholder="البحث عن عضو..."
@@ -240,16 +240,16 @@ export default function MembersTable({ guildId }: MembersTableProps) {
             className="input pr-10"
           />
         </div>
-        <div className="text-sm text-[#9CA3AF]">
+        <div className="text-sm text-[#B8B09D]">
           {filteredMembers.length} عضو
         </div>
       </div>
 
-      <div className="rounded-lg border border-[#2A2D37] overflow-hidden">
+      <div className="rounded-lg border border-[#393B30] overflow-hidden">
         <table className="w-full">
-          <thead className="bg-[#1A1C23]">
+          <thead className="bg-[#22241C]">
             <tr>
-              <th className="px-4 py-3 text-right text-sm font-medium text-[#9CA3AF]">
+              <th className="px-4 py-3 text-right text-sm font-medium text-[#B8B09D]">
                 <input
                   type="checkbox"
                   checked={selectedMembers.size === filteredMembers.length && filteredMembers.length > 0}
@@ -263,10 +263,10 @@ export default function MembersTable({ guildId }: MembersTableProps) {
                   className="checkbox"
                 />
               </th>
-              <th className="px-4 py-3 text-right text-sm font-medium text-[#9CA3AF]">العضو</th>
-              <th className="px-4 py-3 text-right text-sm font-medium text-[#9CA3AF]">الرتب</th>
-              <th className="px-4 py-3 text-right text-sm font-medium text-[#9CA3AF]">تاريخ الانضمام</th>
-              <th className="px-4 py-3 text-right text-sm font-medium text-[#9CA3AF]">الإجراءات</th>
+              <th className="px-4 py-3 text-right text-sm font-medium text-[#B8B09D]">العضو</th>
+              <th className="px-4 py-3 text-right text-sm font-medium text-[#B8B09D]">الرتب</th>
+              <th className="px-4 py-3 text-right text-sm font-medium text-[#B8B09D]">تاريخ الانضمام</th>
+              <th className="px-4 py-3 text-right text-sm font-medium text-[#B8B09D]">الإجراءات</th>
             </tr>
           </thead>
           <tbody>
@@ -276,7 +276,7 @@ export default function MembersTable({ guildId }: MembersTableProps) {
               const memberRoles = getMemberRoles(member);
               
               return (
-                <tr key={member.user.id} className="border-t border-[#2A2D37] hover:bg-[#1A1C23]">
+                <tr key={member.user.id} className="border-t border-[#393B30] hover:bg-[#22241C]">
                   <td className="px-4 py-3">
                     <input
                       type="checkbox"
@@ -287,12 +287,12 @@ export default function MembersTable({ guildId }: MembersTableProps) {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#5865F2] text-sm font-bold text-white">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#315C43] text-sm font-bold text-white">
                         {displayName.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <div className="font-medium text-[#F0F0F0]">{displayName}</div>
-                        <div className="text-xs text-[#9CA3AF]">{username}</div>
+                        <div className="font-medium text-[#F4EFE2]">{displayName}</div>
+                        <div className="text-xs text-[#B8B09D]">{username}</div>
                       </div>
                     </div>
                   </td>
@@ -303,40 +303,40 @@ export default function MembersTable({ guildId }: MembersTableProps) {
                           key={role.id}
                           className="inline-flex items-center px-2 py-0.5 rounded text-xs"
                           style={{
-                            backgroundColor: role.color ? `#${role.color.toString(16).padStart(6, '0')}` : '#2A2D37',
-                            color: role.color ? '#FFFFFF' : '#9CA3AF'
+                            backgroundColor: role.color ? `#${role.color.toString(16).padStart(6, '0')}` : '#393B30',
+                            color: role.color ? '#FFFFFF' : '#B8B09D'
                           }}
                         >
                           {role.name}
                         </span>
                       ))}
                       {memberRoles.length > 3 && (
-                        <span className="text-xs text-[#9CA3AF]">+{memberRoles.length - 3}</span>
+                        <span className="text-xs text-[#B8B09D]">+{memberRoles.length - 3}</span>
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#9CA3AF]">
+                  <td className="px-4 py-3 text-sm text-[#B8B09D]">
                     {formatDate(member.joined_at)}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleTimeout(member.user.id, 10)}
-                        className="p-2 rounded hover:bg-[#2A2D37] transition-colors"
+                        className="p-2 rounded hover:bg-[#393B30] transition-colors"
                         title="Timeout 10 دقائق"
                       >
                         <Clock className="h-4 w-4 text-[#F59E0B]" />
                       </button>
                       <button
                         onClick={() => handleKick(member.user.id)}
-                        className="p-2 rounded hover:bg-[#2A2D37] transition-colors"
+                        className="p-2 rounded hover:bg-[#393B30] transition-colors"
                         title="طرد"
                       >
                         <LogOut className="h-4 w-4 text-[#F59E0B]" />
                       </button>
                       <button
                         onClick={() => handleBan(member.user.id)}
-                        className="p-2 rounded hover:bg-[#2A2D37] transition-colors"
+                        className="p-2 rounded hover:bg-[#393B30] transition-colors"
                         title="حظر"
                       >
                         <Ban className="h-4 w-4 text-[#EF4444]" />

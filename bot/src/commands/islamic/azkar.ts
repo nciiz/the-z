@@ -215,7 +215,7 @@ const command: BotCommand = {
           .map((s) => HADITH_BOOK_NAMES[s] ?? s)
           .join("، ");
         const embed = new EmbedBuilder()
-          .setColor(0x5865f2)
+          .setColor(0x315c43)
           .setTitle("حالة نظام الأذكار والمحتوى الإسلامي")
           .setDescription(
             [

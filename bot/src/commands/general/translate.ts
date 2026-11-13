@@ -1,80 +1,30 @@
-import { EmbedBuilder, Message } from "discord.js";
+import { EmbedBuilder } from "discord.js";
 import { BotCommand } from "../../types/command";
 import { config } from "../../config";
 import { translateText } from "../../utils/translate";
 import { logError } from "../../utils/logger";
-
-// بسيط تخزين مؤقت للترجمات لتجنب الطلبات المكررة — محدود الحجم + TTL تنظيف عند الإضافة
-const translationCache = new Map<string, { text: string; timestamp: number }>();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 دقائق
-const CACHE_MAX_ENTRIES = 500;
-
-function cacheSet(key: string, value: { text: string; timestamp: number }): void {
-  if (translationCache.size >= CACHE_MAX_ENTRIES) {
-    const oldest = translationCache.keys().next().value;
-    if (oldest !== undefined) translationCache.delete(oldest);
-    const now = Date.now();
-    for (const [k, v] of translationCache) {
-      if (now - v.timestamp >= CACHE_DURATION) translationCache.delete(k);
-    }
-  }
-  translationCache.set(key, value);
-}
 
 const command: BotCommand = {
   name: "translate",
   description: "ترجمة النص تلقائياً (عربي ↔ إنجليزي)",
   category: "عام",
   guildOnly: true,
+  options: [
+    { name: "text", description: "نص مباشر للترجمة، أو اتركه فارغًا للترجمة من ردّك على رسالة", type: "string", required: false }
+  ],
   async run(ctx) {
-    // تحقق من وجود رسالة مختارة
-    const message = ctx.message as Message;
-    const referencedMessage = message.reference?.messageId 
+    const message = ctx.message;
+    const referencedMessage = message?.reference?.messageId
       ? await message.channel.messages.fetch(message.reference.messageId).catch(() => null)
       : null;
-
-    if (!referencedMessage) {
-      await ctx.reply("يجب تحديد رسالة لترجمتها");
-      return;
-    }
-
-    const text = referencedMessage.content;
+    const text = ctx.getString("text")?.trim() || referencedMessage?.content?.trim() || "";
     if (!text || text.trim().length === 0) {
-      await ctx.reply("الرسالة المحددة لا تحتوي على نص");
-      return;
-    }
-
-    // تحديد لغة النص واللغة المستهدفة
-    const isArabic = /[\u0600-\u06FF]/.test(text);
-    
-    let targetLang: string;
-
-    if (isArabic) {
-      targetLang = "en";
-    } else {
-      targetLang = "ar";
-    }
-
-    // التحقق من الذاكرة المؤقتة
-    const cacheKey = `${text.substring(0, 100)}_${targetLang}`;
-    const cached = translationCache.get(cacheKey);
-    const now = Date.now();
-
-    if (cached && (now - cached.timestamp) < CACHE_DURATION) {
-      const translatedText = cached.text.length > 4096 
-        ? cached.text.substring(0, 4093) + "..." 
-        : cached.text;
-
-      const embed = new EmbedBuilder()
-        .setColor(config.defaultColor)
-        .setDescription(translatedText);
-
-      await ctx.reply({ embeds: [embed] });
+      await ctx.reply("اكتب نصًا أو ردّ على رسالة تحتوي على نص.");
       return;
     }
 
     try {
-      const translatedText = await translateText(text, targetLang);
+      const translatedText = await translateText(text);
 
       if (!translatedText || translatedText.trim() === "") {
         await ctx.reply("فشلت الترجمة، يرجى المحاولة مرة أخرى");
@@ -85,9 +35,6 @@ const command: BotCommand = {
       const finalText = translatedText.length > 4096 
         ? translatedText.substring(0, 4093) + "..." 
         : translatedText;
-
-      // حفظ في الذاكرة المؤقتة (مع حد الحجم)
-      cacheSet(cacheKey, { text: translatedText, timestamp: now });
 
       const embed = new EmbedBuilder()
         .setColor(config.defaultColor)

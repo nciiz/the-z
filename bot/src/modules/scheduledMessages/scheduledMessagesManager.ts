@@ -9,7 +9,7 @@ function buildPayload(msg: IScheduledMessage): BaseMessageOptions {
   const payload: BaseMessageOptions = {};
   if (msg.content) payload.content = msg.content;
   if (msg.embed?.enabled) {
-    const embed = new EmbedBuilder().setColor((msg.embed.color || "#5865F2") as any);
+    const embed = new EmbedBuilder().setColor((msg.embed.color || "#315C43") as any);
     if (msg.embed.title) embed.setTitle(msg.embed.title);
     if (msg.embed.description) embed.setDescription(msg.embed.description);
     payload.embeds = [embed];

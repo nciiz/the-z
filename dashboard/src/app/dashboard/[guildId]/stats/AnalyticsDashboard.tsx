@@ -94,7 +94,7 @@ export default function AnalyticsDashboard({ guildId }: { guildId: string }) {
               onClick={() => setTimeRange(range)}
               className={`px-4 py-2 rounded-lg font-medium transition-all ${
                 timeRange === range
-                  ? "bg-[#5865F2] text-white"
+                  ? "bg-[#315C43] text-white"
                   : "bg-slate-800 text-slate-400 hover:bg-slate-700"
               }`}
             >
@@ -120,7 +120,7 @@ export default function AnalyticsDashboard({ guildId }: { guildId: string }) {
                 <div key={index} className="stat-card">
                   <div className="flex items-center justify-between mb-3">
                     <div className="p-3 rounded-xl bg-slate-800/50">
-                      <Icon className="w-6 h-6 text-[#5865F2]" />
+                      <Icon className="w-6 h-6 text-[#315C43]" />
                     </div>
                     <span className={`badge ${getColorClass(stat.color)}`}>
                       {stat.change}
@@ -139,7 +139,7 @@ export default function AnalyticsDashboard({ guildId }: { guildId: string }) {
               <h2 className="text-lg font-semibold">نشاط السيرفر</h2>
               <div className="flex gap-4 text-sm">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-[#5865F2]" />
+                  <div className="w-3 h-3 rounded-full bg-[#315C43]" />
                   <span className="text-slate-400">الرسائل</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -159,7 +159,7 @@ export default function AnalyticsDashboard({ guildId }: { guildId: string }) {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-slate-400">{data.date}</span>
                     <div className="flex gap-4">
-                      <span className="text-[#5865F2] font-medium">{data.messages} رسالة</span>
+                      <span className="text-[#315C43] font-medium">{data.messages} رسالة</span>
                       <span className="text-[#3BA55C] font-medium">+{data.joins}</span>
                       <span className="text-[#ED4245] font-medium">-{data.leaves}</span>
                     </div>
@@ -193,7 +193,7 @@ export default function AnalyticsDashboard({ guildId }: { guildId: string }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="card">
               <div className="flex items-center gap-3 mb-3">
-                <Activity className="w-5 h-5 text-[#5865F2]" />
+                <Activity className="w-5 h-5 text-[#315C43]" />
                 <h3 className="font-semibold">أكثر الأعضاء نشاطاً</h3>
               </div>
               <div className="space-y-2">

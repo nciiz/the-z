@@ -6,14 +6,18 @@ import { ensureDb } from "@/lib/db";
 import { requireGuildAdmin } from "@/lib/guildAccess";
 import { logAction, logError } from "@/lib/logger";
 
-export async function saveMoviesConfig(guildId: string, data: { enabled: boolean; channelId: string }) {
+export async function saveMoviesConfig(guildId: string, data: { enabled: boolean; channelId: string; selectionTimeoutSeconds: number }) {
   try {
     const session = await requireGuildAdmin(guildId);
     await ensureDb();
 
     await GuildConfig.findOneAndUpdate(
       { guildId },
-      { $set: { movies: { enabled: data.enabled, channelId: data.channelId || null } } },
+      { $set: { movies: {
+        enabled: Boolean(data.enabled),
+        channelId: data.channelId || null,
+        selectionTimeoutSeconds: Math.max(30, Math.min(3600, Math.floor(Number(data.selectionTimeoutSeconds) || 300)))
+      } } },
       { upsert: true }
     );
 

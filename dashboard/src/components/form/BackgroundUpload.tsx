@@ -53,14 +53,14 @@ export default function BackgroundUpload({
     () =>
       debouncedValue
         ? { backgroundImage: `url("${debouncedValue}")`, backgroundSize: "cover", backgroundPosition: "center" }
-        : { backgroundImage: "linear-gradient(135deg, #1e1b4b 0%, #5865f2 100%)" },
+        : { backgroundImage: "linear-gradient(135deg, #19271D 0%, #315c43 100%)" },
     [debouncedValue]
   );
 
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[#2A2D37] px-4 py-6 text-sm text-[#9CA3AF] transition-colors hover:border-[#5865F2] hover:text-[#F0F0F0]">
+        <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[#393B30] px-4 py-6 text-sm text-[#B8B09D] transition-colors hover:border-[#315C43] hover:text-[#F4EFE2]">
           <span className="font-medium">رفع صورة من الجهاز</span>
           <span className="text-xs text-slate-500">PNG / JPG / GIF حتى 3 ميجابايت</span>
           <input
@@ -102,13 +102,13 @@ export default function BackgroundUpload({
       <div>
         <label className="label">معاينة حية</label>
         <div
-          className="relative w-full overflow-hidden rounded-xl border border-[#2A2D37]"
+          className="relative w-full overflow-hidden rounded-xl border border-[#393B30]"
           style={{ aspectRatio: "1000 / 400" }}
         >
           <div className="absolute inset-0" style={backgroundStyle} />
           <div className="absolute inset-0 bg-black/35" />
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full border-4 border-white/90 bg-[#2A2D37] text-2xl font-bold text-white">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full border-4 border-white/90 bg-[#393B30] text-2xl font-bold text-white">
               {title.slice(0, 1)}
             </div>
             <p className="text-center text-lg font-bold text-white">{title}</p>

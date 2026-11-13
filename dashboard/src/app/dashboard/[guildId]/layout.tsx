@@ -21,7 +21,7 @@ export default async function GuildLayout({
           ← السيرفرات
         </Link>
         {guild && (
-          <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-[#121318] border border-[#2A2D37] shadow-sm">
+          <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-[#191B15] border border-[#393B30] shadow-sm">
             {guild.icon ? (
               <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg">
                 <Image
@@ -33,11 +33,11 @@ export default async function GuildLayout({
                 />
               </div>
             ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#5865F2] text-xs font-bold text-white">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#315C43] text-xs font-bold text-white">
                 {guild.name.charAt(0)}
               </div>
             )}
-            <h1 className="text-base font-semibold text-[#F0F0F0]">{guild.name}</h1>
+            <h1 className="text-base font-semibold text-[#F4EFE2]">{guild.name}</h1>
           </div>
         )}
       </div>

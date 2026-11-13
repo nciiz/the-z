@@ -73,11 +73,11 @@ export default function TemplatesForm({
         {templates.length === 0 ? (
           <p className="text-sm text-slate-500">لا توجد قوالب محفوظة بعد.</p>
         ) : (
-          <div className="flex flex-col divide-y divide-[#2A2D37]">
+          <div className="flex flex-col divide-y divide-[#393B30]">
             {templates.map((t) => (
               <div key={t.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <p className="font-medium text-[#F0F0F0]">{t.name}</p>
+                  <p className="font-medium text-[#F4EFE2]">{t.name}</p>
                   {t.description && <p className="text-xs text-slate-400">{t.description}</p>}
                   <p className="mt-0.5 text-xs text-slate-500">
                     من سيرفر {t.guildName ?? t.guildId} - {t.backup.roles.length} رتبة، {t.backup.channels.length} روم -{" "}

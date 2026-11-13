@@ -74,7 +74,7 @@ export async function buildColorPanelPayload(gConfig: IGuildConfig) {
 
   const swatch = await renderColorSwatch(
     colorRoles.map((r, i) => ({
-      hex: (r.hex ?? "#5865F2").replace("#", ""),
+      hex: (r.hex ?? "#315C43").replace("#", ""),
       name: r.name || `#${r.hex ?? "5865F2"}`
     })),
     { backgroundUrl: gConfig.colors?.backgroundImageUrl }
@@ -82,7 +82,7 @@ export async function buildColorPanelPayload(gConfig: IGuildConfig) {
   const image = new AttachmentBuilder(swatch, { name: "colors.png" });
 
   const embed = new EmbedBuilder()
-    .setColor("#5865F2")
+    .setColor("#315C43")
     .setTitle("اختر لون اسمك")
     .setDescription(
       "اختر رقم اللون من الصورة أعلاه، ثم اختر نفس الرقم من القائمة بالأسفل لتلوين اسمك في السيرفر، أو اختر حذف اللون لإزالة لونك."

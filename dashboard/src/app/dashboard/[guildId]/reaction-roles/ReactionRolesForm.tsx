@@ -115,7 +115,7 @@ export default function ReactionRolesForm({
         ) : (
           <div className="flex flex-col gap-3">
             {state.roles.map((row, i) => (
-              <div key={i} className="flex flex-col gap-3 rounded-lg bg-[#1A1C23] p-3 sm:flex-row sm:items-end">
+              <div key={i} className="flex flex-col gap-3 rounded-lg bg-[#22241C] p-3 sm:flex-row sm:items-end">
                 <div className="flex-1">
                   <RoleSelect
                     label={`الرتبة ${i + 1}`}

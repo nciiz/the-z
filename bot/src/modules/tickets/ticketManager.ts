@@ -29,6 +29,7 @@ import { getGuildConfig } from "../../utils/guildConfig";
 import { logError } from "../../utils/logger";
 
 type TicketAnswer = { question: string; answer: string };
+const ticketCreationLocks = new Set<string>();
 
 /** يقسّم مصفوفة إلى مجموعات بحجم ثابت (يُستخدم لتوزيع الأزرار على صفوف) */
 function chunkArray<T>(items: T[], size: number): T[][] {
@@ -74,7 +75,7 @@ async function sendTicketWelcome(
       embeds: [
         new EmbedBuilder()
           .setColor(config.defaultColor)
-          .setTitle(`🎫 ${category.name}`)
+          .setTitle(category.name)
           .setDescription(
             applyVariables(
               "مرحباً {user}! شكراً لتواصلك معنا، سيقوم فريق الدعم بالرد عليك في أقرب وقت ممكن.",
@@ -94,7 +95,7 @@ async function sendTicketWelcome(
   if (answers.length) {
     const qaEmbed = new EmbedBuilder()
       .setColor(config.defaultColor)
-      .setTitle("📋 معلومات التذكرة")
+      .setTitle("معلومات التذكرة")
       .addFields(
         answers.map((a) => ({
           name: a.question.slice(0, 256) || "سؤال",
@@ -123,74 +124,49 @@ async function createTicketChannel(
   guild: Guild,
   member: GuildMember,
   category: ITicketCategory,
-  answers: TicketAnswer[]
+  answers: TicketAnswer[],
+  maxOpenPerUser = 0
 ): Promise<TextChannel> {
-  const totalCount = await Ticket.countDocuments({ guildId: guild.id });
-  const number = totalCount + 1;
-  const rawName = (category.ticketNameFormat || "ticket-{count}").replace(/{count}/g, String(number));
-  const name = sanitizeChannelName(rawName);
-
-  const botId = guild.members.me?.id ?? guild.client.user!.id;
-
-  const overwrites: OverwriteResolvable[] = [
-    { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
-    {
-      id: member.id,
-      allow: [
-        PermissionFlagsBits.ViewChannel,
-        PermissionFlagsBits.SendMessages,
-        PermissionFlagsBits.ReadMessageHistory
-      ]
-    },
-    {
-      id: botId,
-      allow: [
-        PermissionFlagsBits.ViewChannel,
-        PermissionFlagsBits.SendMessages,
-        PermissionFlagsBits.ReadMessageHistory,
-        PermissionFlagsBits.ManageChannels
-      ]
+  const lockKey = guild.id;
+  if (ticketCreationLocks.has(lockKey)) throw new Error("لديك طلب فتح تذكرة قيد التنفيذ.");
+  ticketCreationLocks.add(lockKey);
+  let channel: TextChannel | null = null;
+  try {
+    const openCount = await Ticket.countDocuments({ guildId: guild.id, ownerId: member.id, status: "open" });
+    if (maxOpenPerUser > 0 && openCount >= maxOpenPerUser) {
+      throw new Error(`وصلت إلى الحد الأقصى للتذاكر المفتوحة (${maxOpenPerUser}).`);
     }
-  ];
-
-  for (const roleId of category.staffRoleIds ?? []) {
-    overwrites.push({
-      id: roleId,
-      allow: [
-        PermissionFlagsBits.ViewChannel,
-        PermissionFlagsBits.SendMessages,
-        PermissionFlagsBits.ReadMessageHistory
-      ]
-    });
+    const number = (await Ticket.countDocuments({ guildId: guild.id })) + 1;
+    const rawName = (category.ticketNameFormat || "ticket-{count}").replace(/{count}/g, String(number));
+    const botId = guild.members.me?.id ?? guild.client.user!.id;
+    const overwrites: OverwriteResolvable[] = [
+      { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
+      { id: member.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+      { id: botId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageChannels] },
+      ...(category.staffRoleIds ?? []).map((roleId) => ({
+        id: roleId,
+        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory]
+      }))
+    ];
+    channel = await guild.channels.create({
+      name: sanitizeChannelName(rawName),
+      type: ChannelType.GuildText,
+      parent: category.categoryId || undefined,
+      permissionOverwrites: overwrites
+    }) as TextChannel;
+    await Ticket.create({ guildId: guild.id, channelId: channel.id, categoryKey: category.key, ownerId: member.id, number, status: "open", answers });
+    await sendTicketWelcome(channel, member, category, answers);
+    await createNotification(guild.id, "ticket", `تذكرة جديدة #${number}`, `${member.user.tag} فتح تذكرة في ${category.name ?? category.key}`).catch(() => null);
+    return channel;
+  } catch (error) {
+    if (channel) {
+      await Ticket.deleteOne({ channelId: channel.id }).catch(() => null);
+      await channel.delete("فشل إعداد التذكرة").catch(() => null);
+    }
+    throw error;
+  } finally {
+    ticketCreationLocks.delete(lockKey);
   }
-
-  const channel = (await guild.channels.create({
-    name,
-    type: ChannelType.GuildText,
-    parent: category.categoryId || undefined,
-    permissionOverwrites: overwrites
-  })) as TextChannel;
-
-  await Ticket.create({
-    guildId: guild.id,
-    channelId: channel.id,
-    categoryKey: category.key,
-    ownerId: member.id,
-    number,
-    status: "open",
-    answers
-  });
-
-  await createNotification(
-    guild.id,
-    "ticket",
-    `تذكرة جديدة #${number}`,
-    `${member.user.tag} فتح تذكرة في ${category.name ?? category.key}`
-  ).catch(() => null);
-
-  await sendTicketWelcome(channel, member, category, answers);
-
-  return channel;
 }
 
 /** يعالج طلب فتح تذكرة عبر زر أو قائمة سحب: يعرض نموذج الأسئلة إن وُجد، أو ينشئ التذكرة مباشرة */
@@ -203,10 +179,14 @@ async function handleTicketOpenRequest(
   if (!guild) return;
 
   const gConfig = await getGuildConfig(client, guild.id);
+  if (!gConfig.tickets?.enabled) {
+    await interaction.reply({ content: "نظام التذاكر غير مفعّل حاليًا.", ephemeral: true });
+    return;
+  }
   const category = gConfig.tickets.categories.find((c) => c.key === key);
 
   if (!category) {
-    await interaction.reply({ content: "❌ هذا التصنيف لم يعد متاحاً.", ephemeral: true });
+    await interaction.reply({ content: "هذا التصنيف لم يعد متاحاً.", ephemeral: true });
     return;
   }
 
@@ -216,7 +196,7 @@ async function handleTicketOpenRequest(
     const hasBlockedRole = category.blockedRoleIds.some((roleId) => member.roles.cache.has(roleId));
     if (hasBlockedRole) {
       await interaction.reply({ 
-        content: "❌ لا يمكنك فتح تذكرة لأنك تمتلك رتبة محظورة من فتح التذاكر.", 
+        content: "لا يمكنك فتح تذكرة لأنك تمتلك رتبة محظورة من فتح التذاكر.", 
         ephemeral: true 
       });
       return;
@@ -232,7 +212,7 @@ async function handleTicketOpenRequest(
     });
     if (openCount >= maxOpen) {
       await interaction.reply({
-        content: `❌ لا يمكنك فتح أكثر من ${maxOpen} تذكرة مفتوحة في نفس الوقت.`,
+        content: `لا يمكنك فتح أكثر من ${maxOpen} تذكرة مفتوحة في نفس الوقت.`,
         ephemeral: true
       });
       return;
@@ -258,7 +238,14 @@ async function handleTicketOpenRequest(
   }
 
   await interaction.deferReply({ ephemeral: true });
-  const channel = await createTicketChannel(guild, member, category, []);
+  let channel: TextChannel;
+  try {
+    channel = await createTicketChannel(guild, member, category, [], gConfig.tickets.maxOpenPerUser);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "تعذّر إنشاء التذكرة الآن.";
+    await interaction.editReply({ content: reason });
+    return;
+  }
   
   const openMsg = category.openMessage;
   if (openMsg?.enabled) {
@@ -280,7 +267,7 @@ async function handleTicketOpenRequest(
     const openPayload = buildMessageFromCustom(openMsg, varsCtx);
     await interaction.editReply({ ...openPayload, content: openPayload.content || `تم إنشاء تذكرتك بنجاح: <#${channel.id}>` });
   } else {
-    await interaction.editReply({ content: `✅ تم إنشاء تذكرتك بنجاح: <#${channel.id}>` });
+    await interaction.editReply({ content: `تم إنشاء تذكرتك بنجاح: <#${channel.id}>` });
   }
 }
 
@@ -291,10 +278,14 @@ async function handleTicketModalSubmit(interaction: ModalSubmitInteraction, clie
 
   const key = interaction.customId.replace("ticket_modal_", "");
   const gConfig = await getGuildConfig(client, guild.id);
+  if (!gConfig.tickets?.enabled) {
+    await interaction.reply({ content: "نظام التذاكر غير مفعّل حاليًا.", ephemeral: true });
+    return;
+  }
   const category = gConfig.tickets.categories.find((c) => c.key === key);
 
   if (!category) {
-    await interaction.reply({ content: "❌ هذا التصنيف لم يعد متاحاً.", ephemeral: true });
+    await interaction.reply({ content: "هذا التصنيف لم يعد متاحاً.", ephemeral: true });
     return;
   }
 
@@ -306,7 +297,14 @@ async function handleTicketModalSubmit(interaction: ModalSubmitInteraction, clie
   }));
 
   const member = interaction.member as GuildMember;
-  const channel = await createTicketChannel(guild, member, category, answers);
+  let channel: TextChannel;
+  try {
+    channel = await createTicketChannel(guild, member, category, answers, gConfig.tickets.maxOpenPerUser);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "تعذّر إنشاء التذكرة الآن.";
+    await interaction.editReply({ content: reason });
+    return;
+  }
   
   const openMsg = category.openMessage;
   if (openMsg?.enabled) {
@@ -328,7 +326,7 @@ async function handleTicketModalSubmit(interaction: ModalSubmitInteraction, clie
     const openPayload = buildMessageFromCustom(openMsg, varsCtx);
     await interaction.editReply({ ...openPayload, content: openPayload.content || `تم إنشاء تذكرتك بنجاح: <#${channel.id}>` });
   } else {
-    await interaction.editReply({ content: `✅ تم إنشاء تذكرتك بنجاح: <#${channel.id}>` });
+    await interaction.editReply({ content: `تم إنشاء تذكرتك بنجاح: <#${channel.id}>` });
   }
 }
 
@@ -339,7 +337,7 @@ async function handleTicketClaim(interaction: ButtonInteraction, client: Extende
 
   const ticket = await Ticket.findOne({ channelId: interaction.channelId, status: "open" });
   if (!ticket) {
-    await interaction.reply({ content: "❌ هذه التذكرة غير موجودة أو مغلقة بالفعل.", ephemeral: true });
+    await interaction.reply({ content: "هذه التذكرة غير موجودة أو مغلقة بالفعل.", ephemeral: true });
     return;
   }
 
@@ -347,11 +345,11 @@ async function handleTicketClaim(interaction: ButtonInteraction, client: Extende
   const category = gConfig.tickets.categories.find((c) => c.key === ticket.categoryKey);
   const member = interaction.member as GuildMember;
   const isStaff =
-    category?.staffRoleIds.some((roleId) => member.roles.cache.has(roleId)) ||
+    (category?.staffRoleIds ?? []).some((roleId) => member.roles.cache.has(roleId)) ||
     member.permissions.has(PermissionFlagsBits.Administrator);
 
   if (!isStaff) {
-    await interaction.reply({ content: "❌ لا تملك صلاحية استلام هذه التذكرة.", ephemeral: true });
+    await interaction.reply({ content: "لا تملك صلاحية استلام هذه التذكرة.", ephemeral: true });
     return;
   }
 
@@ -375,14 +373,14 @@ async function handleTicketClaim(interaction: ButtonInteraction, client: Extende
       );
       
       await interaction.update({ 
-        content: `✅ تم إلغاء استلام هذه التذكرة بواسطة <@${member.id}>.`,
+        content: `تم إلغاء استلام هذه التذكرة بواسطة <@${member.id}>.`,
         components: [controlRow]
       });
       return;
     } else {
       // شخص آخر استلم التذكرة بالفعل
       await interaction.reply({ 
-        content: `❌ هذه التذكرة مستلمة بالفعل بواسطة <@${ticket.claimedBy}>.`, 
+        content: `هذه التذكرة مستلمة بالفعل بواسطة <@${ticket.claimedBy}>.`, 
         ephemeral: true 
       });
       return;
@@ -444,7 +442,7 @@ async function handleTicketCloseButton(interaction: ButtonInteraction, client: E
 
   const ticket = await Ticket.findOne({ channelId: channel.id, status: "open" });
   if (!ticket) {
-    await interaction.reply({ content: "❌ هذه التذكرة غير موجودة أو مغلقة بالفعل.", ephemeral: true });
+    await interaction.reply({ content: "هذه التذكرة غير موجودة أو مغلقة بالفعل.", ephemeral: true });
     return;
   }
 
@@ -452,11 +450,11 @@ async function handleTicketCloseButton(interaction: ButtonInteraction, client: E
   const category = gConfig.tickets.categories.find((c) => c.key === ticket.categoryKey);
   const member = interaction.member as GuildMember;
   const isStaff =
-    category?.staffRoleIds.some((roleId) => member.roles.cache.has(roleId)) ||
+    (category?.staffRoleIds ?? []).some((roleId) => member.roles.cache.has(roleId)) ||
     member.permissions.has(PermissionFlagsBits.Administrator);
 
   if (!isStaff) {
-    await interaction.reply({ content: "❌ لا تملك صلاحية إغلاق هذه التذكرة. فقط فريق الدعم يمكنه إغلاق التذاكر.", ephemeral: true });
+    await interaction.reply({ content: "لا تملك صلاحية إغلاق هذه التذكرة. فقط فريق الدعم يمكنه إغلاق التذاكر.", ephemeral: true });
     return;
   }
 
@@ -517,7 +515,7 @@ export async function closeTicket(
   const category = gConfig.tickets.categories.find((c) => c.key === ticket.categoryKey);
 
   try {
-    const attachment = await createTranscript(channel, {
+    const attachment = gConfig.tickets.saveTranscriptAsHtml === false ? null : await createTranscript(channel, {
       limit: -1,
       returnType: ExportReturnType.Attachment,
       filename: `transcript-${channel.name}.html`,
@@ -530,18 +528,18 @@ export async function closeTicket(
       if (logChannel?.isTextBased()) {
         const logEmbed = new EmbedBuilder()
           .setColor(config.defaultColor)
-          .setTitle("Ticket Transcript Closed")
+      .setTitle(attachment ? "نسخة محادثة التذكرة" : "تم إغلاق التذكرة")
           .addFields(
-            { name: "Number", value: `#${ticket.number}`, inline: true },
-            { name: "Category", value: category?.name ?? ticket.categoryKey, inline: true },
-            { name: "Ticket Owner", value: `<@${ticket.ownerId}>`, inline: true },
-            { name: "Closed By", value: `<@${closedById}>`, inline: true }
+            { name: "رقم التذكرة", value: `#${ticket.number}`, inline: true },
+            { name: "التصنيف", value: category?.name ?? ticket.categoryKey, inline: true },
+            { name: "صاحب التذكرة", value: `<@${ticket.ownerId}>`, inline: true },
+            { name: "أغلقها", value: `<@${closedById}>`, inline: true }
           )
           .setTimestamp();
 
         const logMessage = await (logChannel as TextChannel).send({ 
           embeds: [logEmbed], 
-          files: [attachment]
+          files: attachment ? [attachment] : []
         });
 
         // Get the attachment URL from the sent message
@@ -550,7 +548,7 @@ export async function closeTicket(
           const row = new ActionRowBuilder<ButtonBuilder>()
             .addComponents(
               new ButtonBuilder()
-                .setLabel("Open Transcript")
+                .setLabel("فتح نسخة المحادثة")
                 .setStyle(ButtonStyle.Link)
                 .setURL(transcriptAttachment.url)
             );
@@ -612,12 +610,7 @@ export async function sendTicketPanel(channel: TextChannel, gConfig: IGuildConfi
             value: c.key,
             emoji: resolveEmojiOption(c.emoji)
           }))
-        )
-        .addOptions({
-          label: "Restart",
-          value: "restart",
-          emoji: undefined
-        });
+        );
       messagePayload.components = [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)];
     } else {
       const buttonStyleMap: Record<string, ButtonStyle> = {
@@ -654,35 +647,6 @@ export async function sendTicketPanel(channel: TextChannel, gConfig: IGuildConfi
 /** يسجّل جميع معالجات الأزرار/القوائم/النماذج الخاصة بنظام التذاكر في الموجّه المركزي */
 export function registerTicketComponents(router: ComponentRouter): void {
   router.registerSelect("ticket_open_select", async (interaction: StringSelectMenuInteraction, client) => {
-    if (interaction.values[0] === "restart") {
-      // Reset the select menu to allow reuse
-      if (!interaction.guildId) return;
-      
-      const gConfig = await getGuildConfig(client, interaction.guildId);
-      const categories = gConfig.tickets.categories ?? [];
-      
-      const select = new StringSelectMenuBuilder()
-        .setCustomId("ticket_open_select")
-        .setPlaceholder("اختر نوع التذكرة")
-        .addOptions(
-          categories.slice(0, 25).map((c) => ({
-            label: c.name.slice(0, 100),
-            value: c.key,
-            emoji: resolveEmojiOption(c.emoji)
-          }))
-        )
-        .addOptions({
-          label: "Restart",
-          value: "restart",
-          emoji: undefined
-        });
-      
-      await interaction.update({ 
-        components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)] 
-      });
-      return;
-    }
-    
     await handleTicketOpenRequest(interaction, client, interaction.values[0]);
   });
 

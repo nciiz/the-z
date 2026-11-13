@@ -31,8 +31,8 @@ export default async function ModerationPage({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-[#F0F0F0]">سجل الإشراف</h2>
-          <p className="text-sm text-[#9CA3AF]">
+          <h2 className="text-lg font-semibold text-[#F4EFE2]">سجل الإشراف</h2>
+          <p className="text-sm text-[#B8B09D]">
             آخر 100 إجراء من أوامر الإشراف والرقابة التلقائية في هذا السيرفر
           </p>
         </div>

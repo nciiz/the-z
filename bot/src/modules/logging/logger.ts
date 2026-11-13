@@ -24,9 +24,13 @@ export type LogChannelKey =
   | "reactionroles"
   | string;
 
-/** ذاكرة مؤقتة بسيطة لتقليل تكرار السجلات نفسها */
-const logCache = new Map<string, number>();
-const LOG_CACHE_TTL = 10000; // 10 ثواني
+const MAX_FIELD_LENGTH = 1024;
+
+function trimField(value: unknown): string | undefined {
+  if (value == null || value === "") return undefined;
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return text.length > MAX_FIELD_LENGTH ? `${text.slice(0, MAX_FIELD_LENGTH - 1)}…` : text;
+}
 
 export interface LogOptions {
   executorId?: string;
@@ -59,33 +63,29 @@ export async function sendLog(
     const gConfig = await getGuildConfig(client, guildId);
     if (!gConfig.logging?.enabled) return;
     const channelId = (gConfig.logging.channels as any)?.[key];
-    if (!channelId) return;
-
-    // إنشاء مفتاح للكاش لتجنب تكرار السجلات المتشابهة
-    const logKey = `${guildId}:${key}:${JSON.stringify(embed.data)}`;
-    const now = Date.now();
-    const lastLog = logCache.get(logKey);
-
-    // تجاهل السجلات المتكررة خلال 10 ثواني
-    if (lastLog && (now - lastLog) < LOG_CACHE_TTL) {
-      return;
-    }
-
-    logCache.set(logKey, now);
-
-    // تنظيف الكاش القديم
-    for (const [k, time] of logCache.entries()) {
-      if (now - time > LOG_CACHE_TTL) {
-        logCache.delete(k);
-      }
-    }
-
-    const channel = await client.channels.fetch(channelId).catch(() => null);
-    if (!channel || !channel.isTextBased()) return;
 
     // تحسين الـ embed
-    if (!embed.data.color) embed.setColor(botConfig.defaultColor);
+    embed.setColor(botConfig.defaultColor);
     if (!embed.data.timestamp) embed.setTimestamp();
+    if (!embed.data.footer?.text) embed.setFooter({ text: `The Z · ${key}` });
+
+    const metadata = [
+      ["المنفّذ", options?.executorId ? `${options.executorTag ?? "عضو"} (${options.executorId})` : undefined],
+      ["العضو المتأثر", options?.targetId ? `${options.targetTag ?? "عضو"} (${options.targetId})` : undefined],
+      ["السبب", options?.reason],
+      ["المدة", options?.duration],
+      ["القناة", options?.channelId ? `${options.channelName ?? "قناة"} (${options.channelId})` : undefined],
+      ["الرتبة", options?.roleId ? `${options.roleName ?? "رتبة"} (${options.roleId})` : undefined],
+      ["قبل", options?.before],
+      ["بعد", options?.after]
+    ] as const;
+    const existingNames = new Set((embed.data.fields ?? []).map((field) => field.name));
+    for (const [name, rawValue] of metadata) {
+      const value = trimField(rawValue);
+      if (value && !existingNames.has(name) && (embed.data.fields?.length ?? 0) < 25) {
+        embed.addFields({ name, value, inline: name !== "السبب" });
+      }
+    }
 
     // حفظ السجل في قاعدة البيانات دائما مع تفاصيل كاملة
     const logAction = embed.data.title || embed.data.description?.slice(0, 80) || "Unknown";
@@ -109,21 +109,21 @@ export async function sendLog(
       after: options?.after,
       details: options?.details,
       createdAt: new Date()
-    }).catch(() => {});
+    }).catch((err) => logError("log/database", err));
+
+    if (!channelId) return;
+    const channel = await client.channels.fetch(channelId).catch(() => null);
+    if (!channel || !channel.isTextBased()) return;
 
     // استخدام retry للتعامل مع rate limits
     await client.withRetry(async () => {
-      await (channel as any).send({ embeds: [embed], ...extra });
+      await (channel as any).send({ ...extra, embeds: [embed], allowedMentions: { parse: [] } });
     }, 2, 500).catch((err) => {
-      console.warn('[Log] Failed to send log after retries:', err.message);
+      logError("log/discord-send", err);
     });
   } catch (err: any) {
     // التعامل مع rate limits بشكل خاص
-    if (err.code === 50001 || err.message?.includes('Rate limit')) {
-      console.warn('[Log] Rate limit hit, logging suppressed temporarily');
-      return;
-    }
-    console.error('[Log] Error sending log:', err);
+    logError("log/send", err);
   }
 }
 

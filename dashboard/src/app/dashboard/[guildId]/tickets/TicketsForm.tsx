@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AlertTriangle, FolderOpen, Info, Ticket as TicketIcon } from "lucide-react";
 import { IGuildConfig, ITicketCategory } from "@thez/shared/client";
 import { DiscordChannel, DiscordRole } from "@/lib/discord";
 import Toggle from "@/components/form/Toggle";
@@ -13,7 +14,7 @@ import { saveTicketsConfig } from "./actions";
 
 function createCategory(): ITicketCategory {
   return {
-    key: `cat_${Date.now()}`,
+    key: `cat_${crypto.randomUUID()}`,
     name: "تصنيف جديد",
     emoji: "",
     categoryId: "",
@@ -83,7 +84,7 @@ export default function TicketsForm({
 
       <section className="card flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold">🎫 إعدادات نظام التذاكر</h2>
+          <h2 className="flex items-center gap-2 text-lg font-bold"><TicketIcon size={20} /> إعدادات نظام التذاكر</h2>
           <Toggle
             checked={state.enabled}
             onChange={(v) => setState({ ...state, enabled: v })}
@@ -115,7 +116,7 @@ export default function TicketsForm({
                 setState({ ...state, panelButtonStyle: e.target.value as "Primary" | "Secondary" | "Success" | "Danger" })
               }
             >
-              <option value="Primary">أزرق (Primary)</option>
+              <option value="Primary">أساسي (Primary)</option>
               <option value="Secondary">رمادي (Secondary)</option>
               <option value="Success">أخضر (Success)</option>
               <option value="Danger">أحمر (Danger)</option>
@@ -158,9 +159,9 @@ export default function TicketsForm({
           />
         </div>
 
-        <div className="card bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-          <h3 className="font-bold text-blue-900 dark:text-blue-100 mb-2">ℹ️ التعديلات الجديدة على نظام التذاكر</h3>
-          <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-disc list-inside">
+        <div className="card border-[#315c43]/30 bg-[#315c43]/10">
+          <h3 className="mb-2 flex items-center gap-2 font-bold"><Info size={18} /> خصائص نظام التذاكر</h3>
+          <ul className="list-disc list-inside space-y-1 text-sm">
             <li><strong>نظام الاستلام المتقدم:</strong> عند استلام التذكرة يظهر اسم المستلم على الزر، ولا يمكن لآخرين استلامها. يمكن إلغاء الاستلام بالضغط مرة ثانية.</li>
             <li><strong>إغلاق التذاكر:</strong> فقط فريق الدعم (Staff) يمكنه إغلاق التذاكر، صاحب التذكرة لم يعد يستطيع إغلاقها.</li>
             <li><strong>الرتب المحظورة:</strong> يمكنك تحديد رتب محظورة من فتح التذاكر من كل تصنيف (انظر إعدادات التصنيف).</li>
@@ -172,8 +173,8 @@ export default function TicketsForm({
 
       <section className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold">📂 تصنيفات التذاكر</h2>
-          <button type="button" className="btn-secondary" onClick={addCategory}>
+          <h2 className="flex items-center gap-2 text-lg font-bold"><FolderOpen size={20} /> تصنيفات التذاكر</h2>
+          <button type="button" className="btn-secondary" onClick={addCategory} disabled={state.categories.length >= 25}>
             + إضافة تصنيف
           </button>
         </div>
@@ -207,7 +208,7 @@ export default function TicketsForm({
                 />
               </div>
               <div>
-                <label className="label">الإيموجي</label>
+                <label className="label">رمز مخصص من ديسكورد (اختياري)</label>
                 <input
                   className="input"
                   value={cat.emoji ?? ""}
@@ -245,9 +246,9 @@ export default function TicketsForm({
                 onChange={(v) => updateCategory(index, { blockedRoleIds: v })}
               />
               
-              <div className="card bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 sm:col-span-2">
-                <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                  <strong>⚠️ ملاحظة:</strong> أعضاء فريق الدعم فقط يمكنهم استلام وإغلاق التذاكر. الرتب المحظورة لا يمكنها فتح التذاكر من هذا التصنيف.
+              <div className="card border-[#8a6546]/30 bg-[#8a6546]/10 sm:col-span-2">
+                <p className="flex items-start gap-2 text-sm">
+                  <AlertTriangle size={18} className="mt-0.5 shrink-0" /> أعضاء فريق الدعم فقط يمكنهم استلام وإغلاق التذاكر. الرتب المحظورة لا يمكنها فتح التذاكر من هذا التصنيف.
                 </p>
               </div>
 
@@ -288,7 +289,7 @@ export default function TicketsForm({
                 <button
                   type="button"
                   className="btn-secondary !px-2.5 !py-1 text-xs"
-                  onClick={() => addQuestion(index)}
+                  onClick={() => addQuestion(index)} disabled={cat.questions.length >= 5}
                 >
                   + إضافة سؤال
                 </button>

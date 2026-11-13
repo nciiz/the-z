@@ -43,19 +43,23 @@ export async function generateSuggestionImage(
 
   if (!hasBackgroundImage) {
     const gradient = ctx.createLinearGradient(0, 0, width, height);
-    gradient.addColorStop(0, "#1e1b4b");
-    gradient.addColorStop(0.5, "#312e81");
-    gradient.addColorStop(1, "#5865f2");
+    gradient.addColorStop(0, "#19271D");
+    gradient.addColorStop(0.5, "#315C43");
+    gradient.addColorStop(1, "#315c43");
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
   }
 
-  // تعتيم للقراءة
-  ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+  // طبقة تعتيم وتدرج جانبي لتحسين وضوح النص على أي خلفية.
+  const shade = ctx.createLinearGradient(0, 0, width, height);
+  shade.addColorStop(0, "rgba(20, 28, 22, 0.76)");
+  shade.addColorStop(0.55, "rgba(20, 28, 22, 0.55)");
+  shade.addColorStop(1, "rgba(32, 23, 17, 0.78)");
+  ctx.fillStyle = shade;
   ctx.fillRect(0, 0, width, height);
 
   // إطار داخلي
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+  ctx.strokeStyle = "rgba(232, 224, 207, 0.38)";
   ctx.lineWidth = 2;
   ctx.strokeRect(20, 20, width - 40, height - 40);
 
@@ -76,7 +80,7 @@ export async function generateSuggestionImage(
     // حدود الصورة
     ctx.beginPath();
     ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
-    ctx.strokeStyle = "#ffffff";
+    ctx.strokeStyle = "#e8e0cf";
     ctx.lineWidth = 3;
     ctx.stroke();
   } catch {
@@ -85,23 +89,23 @@ export async function generateSuggestionImage(
 
   // اسم المستخدم
   ctx.textAlign = "left";
-  ctx.fillStyle = options.usernameColor || "#ffffff";
+  ctx.fillStyle = options.usernameColor || "#f4efdf";
   ctx.font = `bold 28px "${fontName}"`;
   ctx.fillText(user.username, avatarX + avatarSize + 20, avatarY + 35);
 
   // التاج
-  ctx.fillStyle = options.tagColor || "#b9bbbe";
+  ctx.fillStyle = options.tagColor || "#d0c2a6";
   ctx.font = `18px "${fontName}"`;
   ctx.fillText(user.tag, avatarX + avatarSize + 20, avatarY + 65);
 
   // عنوان الاقتراح
-  ctx.fillStyle = options.titleColor || "#5865f2";
+  ctx.fillStyle = options.titleColor || "#e8e0cf";
   ctx.font = `bold 22px "${fontName}"`;
   ctx.textAlign = "center";
   ctx.fillText(options.titleText || "اقتراح جديد", width / 2, avatarY + avatarSize + 50);
 
   // نص الاقتراح مع التفاف
-  ctx.fillStyle = options.contentColor || "#ffffff";
+  ctx.fillStyle = options.contentColor || "#f4efdf";
   ctx.font = `24px "${fontName}"`;
   ctx.textAlign = "center";
 
@@ -143,7 +147,7 @@ export async function generateSuggestionImage(
   ctx.stroke();
 
   // تذييل
-  ctx.fillStyle = options.footerColor || "#b9bbbe";
+  ctx.fillStyle = options.footerColor || "#d0c2a6";
   ctx.font = `16px "${fontName}"`;
   ctx.textAlign = "center";
   ctx.fillText(options.footerText || "استخدم الأزرار أدناه للتصويت", width / 2, height - 30);

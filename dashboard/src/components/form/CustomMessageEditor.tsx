@@ -69,7 +69,7 @@ export default function CustomMessageEditor({
             <input
               type="color"
               className="h-10 w-full rounded-lg border border-slate-300 dark:border-slate-700"
-              value={embed.color ?? "#5865F2"}
+              value={embed.color ?? "#315C43"}
               onChange={(e) => handleChange({ ...value, embed: { ...embed, color: e.target.value } })}
             />
           </div>

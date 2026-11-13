@@ -28,12 +28,12 @@ export default async function HomePage() {
         <img
           src="/bot-logo.jpg"
           alt="شعار البوت"
-          className="h-16 w-16 rounded-full object-cover shadow-lg ring-2 ring-[#5865F2]/40"
+          className="h-16 w-16 rounded-full object-cover shadow-lg ring-2 ring-[#315C43]/40"
         />
-        <h1 className="text-4xl font-bold sm:text-5xl text-[#F0F0F0]">
+        <h1 className="text-4xl font-bold sm:text-5xl text-[#F4EFE2]">
           لوحة تحكم البوت
         </h1>
-        <p className="max-w-lg text-lg text-[#9CA3AF]">
+        <p className="max-w-lg text-lg text-[#B8B09D]">
           تحكّل كامل بجميع ميزات بوتك: التذاكر، الرومات الصوتية، الحماية، المستويات، والمزيد
         </p>
       </div>
@@ -52,8 +52,8 @@ export default async function HomePage() {
           const Icon = f.icon;
           return (
             <div key={f.label} className="card !p-4 flex flex-col items-center gap-2 text-center">
-              <Icon className="h-5 w-5 text-[#9CA3AF]" />
-              <span className="text-sm font-medium text-[#9CA3AF]">{f.label}</span>
+              <Icon className="h-5 w-5 text-[#B8B09D]" />
+              <span className="text-sm font-medium text-[#B8B09D]">{f.label}</span>
             </div>
           );
         })}

@@ -66,7 +66,7 @@ export default function MemberCounterForm({
 
         <div>
           <label className="label">معاينة حية</label>
-          <div className="flex items-center gap-2 rounded-lg bg-[#1A1C23] px-3 py-2 text-sm text-[#F0F0F0]">
+          <div className="flex items-center gap-2 rounded-lg bg-[#22241C] px-3 py-2 text-sm text-[#F4EFE2]">
             <span className="text-slate-500">{livePreview}</span>
           </div>
         </div>

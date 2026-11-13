@@ -22,7 +22,12 @@ export default async function TicketsPage({ params }: { params: { guildId: strin
     transcriptChannelId: config?.tickets?.transcriptChannelId ?? "",
     saveTranscriptAsHtml: config?.tickets?.saveTranscriptAsHtml ?? true,
     maxOpenPerUser: config?.tickets?.maxOpenPerUser ?? 1,
-    categories: config?.tickets?.categories ?? []
+    categories: (config?.tickets?.categories ?? []).map((category) => ({
+      ...category,
+      staffRoleIds: category.staffRoleIds ?? [],
+      blockedRoleIds: category.blockedRoleIds ?? [],
+      questions: category.questions ?? []
+    }))
   };
 
   return (

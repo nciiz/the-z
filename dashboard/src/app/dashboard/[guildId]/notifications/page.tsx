@@ -40,7 +40,7 @@ export default async function NotificationsPage({ params }: { params: { guildId:
                 <p className="text-xs text-slate-500">{n.message}</p>
                 <p className="text-xs text-slate-400">{new Date(n.createdAt).toLocaleString("ar-EG")}</p>
               </div>
-              <span className={`rounded-full px-2 py-1 text-xs ${n.type === "moderation" ? "bg-[#EF4444] text-white" : n.type === "suggestion" ? "bg-[#5865F2] text-white" : "bg-slate-200"}`}>{n.type}</span>
+              <span className={`rounded-full px-2 py-1 text-xs ${n.type === "moderation" ? "bg-[#EF4444] text-white" : n.type === "suggestion" ? "bg-[#315C43] text-white" : "bg-slate-200"}`}>{n.type}</span>
             </div>
           ))
         )}

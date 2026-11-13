@@ -125,7 +125,7 @@ export default function Sidebar({ guildId }: { guildId: string }) {
     <>
       <button
         onClick={() => setOpen(!open)}
-        className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg border border-[#2A2D37] bg-[#1A1C23] px-4 py-2.5 text-sm font-medium text-[#F0F0F0] lg:hidden"
+        className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg border border-[#393B30] bg-[#22241C] px-4 py-2.5 text-sm font-medium text-[#F4EFE2] lg:hidden"
       >
         {open ? "إخفاء القائمة" : "القائمة"}
       </button>
@@ -135,11 +135,11 @@ export default function Sidebar({ guildId }: { guildId: string }) {
           const hasActive = group.items.some((i) => pathname === `${base}${i.href}`);
           return (
             <div key={group.title} className="flex flex-col gap-1">
-              {gi > 0 && <div className="my-1 border-t border-[#2A2D37]" />}
+              {gi > 0 && <div className="my-1 border-t border-[#393B30]" />}
               <button
                 onClick={() => toggleGroup(group.title)}
                 className={`flex items-center justify-between rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wide ${
-                  hasActive ? "text-[#F0F0F0]" : "text-[#9CA3AF]"
+                  hasActive ? "text-[#F4EFE2]" : "text-[#B8B09D]"
                 }`}
               >
                 <span>{group.title}</span>
@@ -157,8 +157,8 @@ export default function Sidebar({ guildId }: { guildId: string }) {
                       onClick={() => setOpen(false)}
                       className={`flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-150 ${
                         active
-                          ? "bg-[#5865F2] text-white"
-                          : "text-[#9CA3AF] hover:bg-[#1A1C23] hover:text-[#F0F0F0]"
+                          ? "bg-[#315C43] text-white"
+                          : "text-[#B8B09D] hover:bg-[#22241C] hover:text-[#F4EFE2]"
                       }`}
                     >
                       <Icon className="h-4 w-4" />

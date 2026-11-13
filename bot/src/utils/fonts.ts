@@ -5,18 +5,37 @@ import { logError } from "./logger";
 
 let isFontRegistered = false;
 let isJpFontRegistered = false;
+let isArabicFontRegistered = false;
 
 /**
  * يضمن تحميل خط Cairo و Noto Sans JP، ثم يعيد عائلة الخطوط.
  */
 export async function ensureFontLoaded(): Promise<string> {
-  if (isFontRegistered && isJpFontRegistered) return '"CairoFont", "NotoJP", sans-serif';
+  const rootDir = process.cwd();
+  if (!isArabicFontRegistered) {
+    const arabicPaths = [
+      path.resolve(rootDir, "fonts", "Cairo-Bold.ttf"),
+      path.resolve(rootDir, "bot", "fonts", "Cairo-Bold.ttf"),
+      path.resolve(__dirname, "..", "..", "..", "fonts", "Cairo-Bold.ttf"),
+      path.resolve(__dirname, "..", "..", "fonts", "Cairo-Bold.ttf")
+    ];
+    for (const fontPath of arabicPaths) {
+      if (!fs.existsSync(fontPath)) continue;
+      try {
+        GlobalFonts.register(fs.readFileSync(fontPath), "CairoFont");
+        isArabicFontRegistered = true;
+        break;
+      } catch (err) {
+        logError("fonts-arabic-local", err);
+      }
+    }
+  }
+  if (isFontRegistered && isJpFontRegistered) return isArabicFontRegistered ? '"CairoFont", "NotoJP", sans-serif' : '"NotoJP", sans-serif';
   if (isFontRegistered) {
     await ensureJpFontLoaded();
-    return '"CairoFont", "NotoJP", sans-serif';
+    return isArabicFontRegistered ? '"CairoFont", "NotoJP", sans-serif' : '"Rubik", "NotoJP", sans-serif';
   }
 
-  const rootDir = process.cwd();
   const possiblePaths = [
     path.resolve(rootDir, "fonts", "Rubik-Bold.ttf"),
     path.resolve(rootDir, "bot", "fonts", "Rubik-Bold.ttf"),
@@ -54,7 +73,11 @@ export async function ensureFontLoaded(): Promise<string> {
   }
 
   await ensureJpFontLoaded();
-  return isFontRegistered ? '"Rubik", "NotoJP", sans-serif' : '"NotoJP", sans-serif';
+  return isArabicFontRegistered
+    ? '"CairoFont", "Rubik", "NotoJP", sans-serif'
+    : isFontRegistered
+      ? '"Rubik", "NotoJP", sans-serif'
+      : '"NotoJP", sans-serif';
 }
 
 async function ensureJpFontLoaded(): Promise<void> {

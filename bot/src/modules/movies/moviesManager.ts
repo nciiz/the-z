@@ -1,6 +1,8 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from "discord.js";
 import { config } from "../../config";
 import { logError } from "../../utils/logger";
+import { getGuildConfig } from "../../utils/guildConfig";
+import { ExtendedClient } from "../../client";
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const OMDB_BASE = "https://www.omdbapi.com";
@@ -102,7 +104,7 @@ function buildMovieEmbed(result: TMDBResult, details: any, imdbRating: string | 
   return embed;
 }
 
-export async function handleMovieSearch(channel: any, query: string, authorId: string) {
+export async function handleMovieSearch(channel: any, query: string, authorId: string, client?: ExtendedClient) {
   if (!query || query.length < 2) return;
 
   if (!config.tmdbApiKey) {
@@ -142,21 +144,24 @@ export async function handleMovieSearch(channel: any, query: string, authorId: s
   const components: any[] = [];
   if (row.components.length > 0) components.push(row);
 
-  // إذا كان هناك أكثر من نتيجة، أضف قائمة منسدلة (بالإنجليزية)
+  // إذا كان هناك أكثر من نتيجة، أضف قائمة اختيار مؤقتة.
   if (results.length > 1) {
+    const timeoutSeconds = client && channel.guildId
+      ? (await getGuildConfig(client, channel.guildId)).movies?.selectionTimeoutSeconds ?? 300
+      : 300;
     const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId(`movies:select:${authorId}`)
-        .setPlaceholder("اختر من النتائج الأخرى")
+        .setPlaceholder("اختر نتيجة أخرى")
         .addOptions(
           results.slice(1, 10).map((r) => {
-            const t = r.original_title ?? r.original_name ?? r.title ?? r.name ?? "Unknown";
+            const t = r.title ?? r.name ?? r.original_title ?? r.original_name ?? "بدون عنوان";
             const d = r.release_date ?? r.first_air_date ?? "";
             const y = d ? new Date(d).getFullYear() : "—";
             const rating = r.vote_average ? r.vote_average.toFixed(1) : "—";
             return {
               label: `${t} (${y})`.slice(0, 100),
-              description: `⭐ ${rating}`.slice(0, 100),
+              description: `التقييم ${rating}`.slice(0, 100),
               value: `${r.media_type}:${r.id}`
             };
           })
@@ -167,26 +172,31 @@ export async function handleMovieSearch(channel: any, query: string, authorId: s
 
   const sent = await channel.send({ embeds: [embed], components }).catch(() => null);
   if (sent && results.length > 1) {
-    // إزالة القائمة المنسدلة بعد 30 ثانية إذا لم يتم الاختيار
-    setTimeout(async () => {
+    // إزالة اختيار النتائج بعد المهلة المحددة، مع إبقاء روابط IMDb والتريلر.
+    const selectionRow = components.find((row: any) =>
+      row.components?.some((component: any) => component.customId?.startsWith("movies:select:"))
+    );
+    const timer = setTimeout(async () => {
       try {
         const fresh = await channel.messages.fetch(sent.id).catch(() => null);
-        if (fresh && fresh.components.length > 0) {
-          // تحقق إذا لم يتم التفاعل بعد
-          const hasDropdown = fresh.components.some((row: any) => row.components.some((c: any) => c.customId?.startsWith("movies:select:")));
-          if (hasDropdown) {
-            const newComponents = components.filter((row: any) => !row.components.some((c: any) => c.customId?.startsWith("movies:select:")));
-            // احتفظ بالأزرار فقط
-            await fresh.edit({ components: newComponents }).catch(() => null);
-          }
-        }
+        if (!fresh || !selectionRow) return;
+        const rows = fresh.components.filter((row: any) =>
+          !row.components.some((component: any) => component.customId?.startsWith("movies:select:"))
+        );
+        await fresh.edit({ components: rows }).catch(() => null);
       } catch {}
-    }, 30000);
+    }, Math.max(30, Math.min(3600, timeoutSeconds)) * 1000);
+    timer.unref?.();
   }
 }
 
 export function registerMovieComponents(router: any) {
   router.registerSelect("movies:select:", async (interaction: any) => {
+    const ownerId = interaction.customId.slice("movies:select:".length);
+    if (!ownerId || interaction.user.id !== ownerId) {
+      await interaction.reply({ content: "هذه القائمة مخصصة لصاحب البحث.", ephemeral: true });
+      return;
+    }
     const value = interaction.values[0];
     const [mediaType, idStr] = value.split(":");
     const id = parseInt(idStr, 10);
@@ -220,10 +230,6 @@ export function registerMovieComponents(router: any) {
     if (trailer) row.addComponents(new ButtonBuilder().setLabel("Trailer").setStyle(ButtonStyle.Link).setURL(`https://www.youtube.com/watch?v=${trailer.key}`));
     const components: any[] = [];
     if (row.components.length > 0) components.push(row);
-    // احذف الرسالة الأصلية (الأشهر) وأرسل المختار
-    try {
-      await interaction.message.delete().catch(() => null);
-    } catch {}
-    await interaction.followUp({ embeds: [embed], components }).catch(() => null);
+    await interaction.update({ embeds: [embed], components }).catch(() => null);
   });
 }

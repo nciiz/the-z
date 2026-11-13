@@ -203,7 +203,7 @@ export default function GifBlockForm({ guildId, initial, channels, roles }: GifB
 
           <button
             onClick={addGifBlock}
-            className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+            className="rounded-md bg-[#315c43] px-4 py-2 text-[#f4efe2] hover:bg-[#244a36]"
           >
             إضافة GIF محظور
           </button>

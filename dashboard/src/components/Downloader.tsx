@@ -85,7 +85,7 @@ export default function DownloaderClient({
         {error && <p className="text-sm text-[#EF4444]">{error}</p>}
 
         {videoUrl && status === "completed" && (
-          <div className="flex flex-col gap-4 rounded-xl border border-[#2A2D37] p-4">
+          <div className="flex flex-col gap-4 rounded-xl border border-[#393B30] p-4">
             <video src={videoUrl} controls className="w-full rounded-lg" style={{ maxHeight: "500px" }} />
             <a href={videoUrl} download className="btn-primary text-center">
               تحميل الفيديو

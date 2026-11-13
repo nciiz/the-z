@@ -69,7 +69,7 @@ export default async function AdvancedPage({ params }: { params: { guildId: stri
         {(recentActions as any[]).length === 0 ? (
           <p className="text-sm text-slate-500">لا توجد أحداث مسجلة بعد.</p>
         ) : (
-          <div className="flex flex-col divide-y divide-[#2A2D37]">
+          <div className="flex flex-col divide-y divide-[#393B30]">
             {(recentActions as any[]).map((a: any) => (
               <div key={String(a._id ?? a.id)} className="flex items-center justify-between gap-3 py-2 text-sm">
                 <span className="font-medium">{a.action}</span>

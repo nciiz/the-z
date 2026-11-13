@@ -33,7 +33,7 @@ export async function handleMemberJoinCaptcha(
   }
 
   const embed = new EmbedBuilder()
-    .setColor(gConfig.embedColor ? parseInt(gConfig.embedColor.replace('#', ''), 16) : 0x5865f2)
+    .setColor(gConfig.embedColor ? parseInt(gConfig.embedColor.replace('#', ''), 16) : 0x315c43)
     .setTitle("🔒 التحقق من الهوية")
     .setDescription(
       `مرحباً ${member} 👋\n` +

@@ -68,7 +68,7 @@ const command: BotCommand = {
     const dlPageUrl = `${baseUrl}/downloader?${params.toString()}`;
 
     const embed = new EmbedBuilder()
-      .setColor(0x5865f2)
+      .setColor(0x315c43)
       .setTitle("صفحة التحميل جاهزة")
       .setDescription(
         `[فتح صفحة التحميل](${dlPageUrl})\n\n` +

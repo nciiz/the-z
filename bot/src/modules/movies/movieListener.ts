@@ -19,6 +19,6 @@ export async function handleMovieMessage(message: Message, sharedConfig?: IGuild
   // حذف رسالة البحث
   await message.delete().catch(() => null);
 
-  await handleMovieSearch(message.channel as any, query, message.author.id);
+  await handleMovieSearch(message.channel as any, query, message.author.id, message.client as any);
   return true;
 }

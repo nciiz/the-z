@@ -16,7 +16,7 @@ export default async function MembersPage({ params }: { params: { guildId: strin
         <div className="flex items-center justify-between">
           <div>
             <h1 className="mb-1 text-xl font-bold">إدارة الأعضاء</h1>
-            <p className="text-sm text-[#9CA3AF]">
+            <p className="text-sm text-[#B8B09D]">
               إدارة أعضاء السيرفر والبحث والفلترة والإجراءات الجماعية
             </p>
           </div>

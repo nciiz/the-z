@@ -104,12 +104,12 @@ export default function CommandsForm({
               <input
                 type="color"
                 className="h-10 w-16 rounded-lg border border-slate-300 dark:border-slate-700"
-                value={generalSettings.embedColor || "#5865f2"}
+                value={generalSettings.embedColor || "#315c43"}
                 onChange={(e) => setGeneralSettings({ ...generalSettings, embedColor: e.target.value })}
               />
               <input
                 className="input flex-1 font-mono"
-                placeholder="#5865f2"
+                placeholder="#315c43"
                 value={generalSettings.embedColor}
                 onChange={(e) => setGeneralSettings({ ...generalSettings, embedColor: e.target.value })}
               />

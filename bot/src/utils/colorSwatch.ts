@@ -25,7 +25,7 @@ export function contrastText(hex: string): string {
   const g = parseInt(hex.slice(2, 4), 16);
   const b = parseInt(hex.slice(4, 6), 16);
   const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-  return luminance > 150 ? "#1A1A1A" : "#FFFFFF";
+  return luminance > 150 ? "#171912" : "#FFFFFF";
 }
 
 /** يرسم صورة شبكة عينات الألوان: كل عينة بلونها + رقمها + الكود السداسي */
@@ -55,7 +55,7 @@ export async function renderColorSwatch(
     ctx.fillStyle = "rgba(35, 36, 40, 0.75)";
     ctx.fillRect(0, 0, width, height);
   } else {
-    ctx.fillStyle = "#232428";
+    ctx.fillStyle = "#191B15";
     ctx.fillRect(0, 0, width, height);
   }
 
@@ -86,7 +86,7 @@ export async function renderColorSwatch(
     ctx.fillStyle = "#FFFFFF";
     ctx.font = `bold 20px "${fontName}"`;
     ctx.fillText(`#${color.hex}`, x + CELL_W / 2, y + COLOR_H + 20);
-    ctx.fillStyle = "#B9BBBE";
+    ctx.fillStyle = "#C5BDAA";
     ctx.font = `16px "${fontName}"`;
     ctx.fillText(color.name, x + CELL_W / 2, y + COLOR_H + 38);
   });

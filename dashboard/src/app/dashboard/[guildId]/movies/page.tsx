@@ -19,7 +19,7 @@ export default async function MoviesPage({ params }: { params: { guildId: string
         title="الأفلام والمسلسلات"
         description="حدد قناة البحث — يعتمد على TMDB و OMDb لعرض البوستر والتقييم والملخص."
       />
-      <MoviesForm guildId={params.guildId} initial={{ enabled: Boolean(movies.enabled), channelId: movies.channelId ?? "" }} channels={channels} />
+      <MoviesForm guildId={params.guildId} initial={{ enabled: Boolean(movies.enabled), channelId: movies.channelId ?? "", selectionTimeoutSeconds: movies.selectionTimeoutSeconds ?? 300 }} channels={channels} />
     </div>
   );
 }

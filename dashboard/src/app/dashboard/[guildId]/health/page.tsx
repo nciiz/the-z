@@ -67,7 +67,7 @@ export default async function HealthPage({ params }: { params: { guildId: string
             <span className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
               <StatusDot ok={s.ok} /> {s.label}
             </span>
-            <span className="text-xl font-bold text-[#F0F0F0]">{s.value}</span>
+            <span className="text-xl font-bold text-[#F4EFE2]">{s.value}</span>
           </div>
         ))}
       </div>
@@ -84,7 +84,7 @@ export default async function HealthPage({ params }: { params: { guildId: string
                   <span className={`mt-1 inline-block h-2 w-2 shrink-0 rounded-full ${issue.severity === "error" ? "bg-[#ED4245]" : "bg-[#FAA61A]"}`} />
                   <div>
                     <span className="text-slate-400">[{issue.area}] </span>
-                    <span className="text-[#F0F0F0]">{issue.message}</span>
+                    <span className="text-[#F4EFE2]">{issue.message}</span>
                   </div>
                 </div>
               ))}

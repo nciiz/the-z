@@ -72,7 +72,7 @@ export default function SuggestionsManager({
     pending: "bg-[#F59E0B] text-white",
     approved: "bg-[#10B981] text-white",
     rejected: "bg-[#EF4444] text-white",
-    implemented: "bg-[#5865F2] text-white"
+    implemented: "bg-[#315C43] text-white"
   };
 
   return (
@@ -172,10 +172,10 @@ export default function SuggestionsManager({
           <div>
             <label className="label">معاينة حية للصورة</label>
             <div
-              className="relative w-full overflow-hidden rounded-xl border border-[#2A2D37] p-6"
+              className="relative w-full overflow-hidden rounded-xl border border-[#393B30] p-6"
               style={{
                 aspectRatio: "1000 / 500",
-                backgroundImage: config.backgroundImage ? `url("${config.backgroundImage}")` : "linear-gradient(135deg, #1e1b4b 0%, #5865f2 100%)",
+                backgroundImage: config.backgroundImage ? `url("${config.backgroundImage}")` : "linear-gradient(135deg, #19271D 0%, #315c43 100%)",
                 backgroundSize: "cover",
                 backgroundPosition: "center"
               }}
@@ -183,7 +183,7 @@ export default function SuggestionsManager({
               <div className="absolute inset-0 bg-black/40" />
               <div className="relative flex h-full flex-col">
                 <div className="flex items-center gap-4">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-white bg-[#2A2D37] text-xl font-bold text-white">ت</div>
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-white bg-[#393B30] text-xl font-bold text-white">ت</div>
                   <div>
                     <p className="text-lg font-bold" style={{ color: config.usernameColor }}>TestUser</p>
                     <p className="text-sm" style={{ color: config.tagColor }}>TestUser#1234</p>

@@ -28,7 +28,7 @@ function createEmptySelfRolePanel(): ISelfRolePanel {
     type: "button",
     maxRoles: 0,
     enabled: true,
-    color: "#5865F2",
+    color: "#315C43",
     options: []
   };
 }
@@ -239,7 +239,7 @@ export default function RolesForm({
                           title={`#${hex}`}
                           className={`relative h-9 w-9 rounded-md border-2 transition ${
                             selected
-                              ? "scale-110 border-[#5865F2] shadow-md"
+                              ? "scale-110 border-[#315C43] shadow-md"
                               : "border-black/20 hover:scale-105 dark:border-white/20"
                           }`}
                           style={{ backgroundColor: `#${hex}` }}
@@ -365,7 +365,7 @@ export default function RolesForm({
                 <input
                   type="color"
                   className="h-10 w-full rounded-lg border border-slate-300 dark:border-slate-700"
-                  value={colorRole.hex ?? "#5865F2"}
+                  value={colorRole.hex ?? "#315C43"}
                   onChange={(e) => updateColorRole(i, { hex: e.target.value })}
                 />
               </div>
@@ -466,7 +466,7 @@ export default function RolesForm({
                 <input
                   type="color"
                   className="h-10 w-full rounded-lg border border-slate-300 dark:border-slate-700"
-                  value={panel.color ?? "#5865F2"}
+                  value={panel.color ?? "#315C43"}
                   onChange={(e) => updatePanel(panel.id, { color: e.target.value })}
                 />
               </div>

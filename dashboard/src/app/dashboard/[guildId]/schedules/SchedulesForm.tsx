@@ -12,7 +12,7 @@ function createEmpty(): IScheduledMessage {
     id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
     channelId: "",
     content: "",
-    embed: { enabled: false, title: "", description: "", color: "#5865F2" },
+    embed: { enabled: false, title: "", description: "", color: "#315C43" },
     runAt: "",
     repeatMinutes: 0,
     enabled: true
@@ -77,7 +77,7 @@ export default function SchedulesForm({
         items.map((m) => (
           <section key={m.id} className="card flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-[#F0F0F0]">رسالة {items.indexOf(m) + 1}</h3>
+              <h3 className="text-sm font-bold text-[#F4EFE2]">رسالة {items.indexOf(m) + 1}</h3>
               <button type="button" className="btn-danger !px-3 !py-1.5 text-xs" onClick={() => remove(m.id)}>
                 حذف
               </button>
@@ -127,8 +127,8 @@ export default function SchedulesForm({
               />
             </div>
 
-            <div className="flex flex-col gap-3 rounded-lg bg-[#1A1C23] p-3">
-              <label className="flex cursor-pointer items-center gap-3 text-sm text-[#9CA3AF]">
+            <div className="flex flex-col gap-3 rounded-lg bg-[#22241C] p-3">
+              <label className="flex cursor-pointer items-center gap-3 text-sm text-[#B8B09D]">
                 <input
                   type="checkbox"
                   checked={m.embed?.enabled ?? false}
@@ -138,7 +138,7 @@ export default function SchedulesForm({
                         enabled: e.target.checked,
                         title: m.embed?.title ?? "",
                         description: m.embed?.description ?? "",
-                        color: m.embed?.color ?? "#5865F2"
+                        color: m.embed?.color ?? "#315C43"
                       }
                     })
                   }
@@ -162,8 +162,8 @@ export default function SchedulesForm({
                     <label className="label">لون الإيمبد</label>
                     <input
                       type="color"
-                      className="h-10 w-full rounded-lg border border-[#2A2D37] bg-transparent"
-                      value={m.embed.color ?? "#5865F2"}
+                      className="h-10 w-full rounded-lg border border-[#393B30] bg-transparent"
+                      value={m.embed.color ?? "#315C43"}
                       onChange={(e) => update(m.id, { embed: { ...m.embed!, color: e.target.value } })}
                     />
                   </div>

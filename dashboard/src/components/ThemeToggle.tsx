@@ -14,7 +14,7 @@ export default function ThemeToggle() {
 
   if (!mounted) {
     return (
-      <button className="p-2 rounded-lg bg-[#1A1C23] border border-[#2A2D37]">
+      <button className="p-2 rounded-lg bg-[#22241C] border border-[#393B30]">
         <div className="h-5 w-5" />
       </button>
     );
@@ -23,13 +23,13 @@ export default function ThemeToggle() {
   return (
     <button
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="p-2 rounded-lg bg-[#1A1C23] border border-[#2A2D37] hover:border-[#5865F2] transition-colors"
+      className="p-2 rounded-lg bg-[#22241C] border border-[#393B30] hover:border-[#315C43] transition-colors"
       title={theme === "dark" ? "تبديل للوضع الفاتح" : "تبديل للوضع الداكن"}
     >
       {theme === "dark" ? (
-        <Sun className="h-5 w-5 text-[#F0F0F0]" />
+        <Sun className="h-5 w-5 text-[#F4EFE2]" />
       ) : (
-        <Moon className="h-5 w-5 text-[#F0F0F0]" />
+        <Moon className="h-5 w-5 text-[#F4EFE2]" />
       )}
     </button>
   );

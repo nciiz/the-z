@@ -40,7 +40,7 @@ export async function saveSuggestionConfig(guildId: string, data: SuggestionConf
             autoThread: data.autoThread,
             backgroundImage: data.backgroundImage || "",
             imageTitle: data.imageTitle || "اقتراح جديد",
-            imageTitleColor: data.imageTitleColor || "#5865f2",
+            imageTitleColor: data.imageTitleColor || "#315c43",
             usernameColor: data.usernameColor || "#ffffff",
             tagColor: data.tagColor || "#b9bbbe",
             contentColor: data.contentColor || "#ffffff",

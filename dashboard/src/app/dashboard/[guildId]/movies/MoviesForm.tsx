@@ -13,7 +13,7 @@ export default function MoviesForm({
   channels
 }: {
   guildId: string;
-  initial: { enabled: boolean; channelId: string };
+  initial: { enabled: boolean; channelId: string; selectionTimeoutSeconds: number };
   channels: DiscordChannel[];
 }) {
   const [config, setConfig] = useState(initial);
@@ -32,6 +32,19 @@ export default function MoviesForm({
           value={config.channelId}
           onChange={(v) => setConfig({ ...config, channelId: v })}
         />
+        <div>
+          <label className="label">مدة إتاحة اختيار نتيجة أخرى (بالثواني)</label>
+          <input
+            type="number"
+            min={30}
+            max={3600}
+            step={30}
+            className="input max-w-xs"
+            value={config.selectionTimeoutSeconds}
+            onChange={(e) => setConfig({ ...config, selectionTimeoutSeconds: Number(e.target.value) })}
+          />
+          <p className="mt-1 text-xs text-slate-500">القيمة الافتراضية 300 ثانية، والحد من 30 ثانية إلى ساعة.</p>
+        </div>
         <p className="text-xs text-slate-500">عند الكتابة في هذه القناة، سيحذف البوت الرسالة ويعرض النتيجة مع البوستر والتقييم والملخص.</p>
         <SaveButton onSave={() => saveMoviesConfig(guildId, config)} />
       </section>

@@ -70,7 +70,7 @@ interface NewRankCardData {
 }
 
 const WIDTH = 1000;
-const HEIGHT = 220;
+const HEIGHT = 260;
 
 function drawRoundedRect(
   ctx: SKRSContext2D,
@@ -101,21 +101,25 @@ export async function generateRankCard(member: GuildMember, data: RankCardData):
   const canvas = createCanvas(WIDTH, HEIGHT);
   const ctx = canvas.getContext("2d");
 
-  // 1. الخلفية الأساسية
-  ctx.fillStyle = "#121318";
+  // خلفية متدرجة من الأخضر الغابي إلى البني الدافئ.
+  const background = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT);
+  background.addColorStop(0, "#17271D");
+  background.addColorStop(0.68, "#20231B");
+  background.addColorStop(1, "#342A20");
+  ctx.fillStyle = background;
   drawRoundedRect(ctx, 0, 0, WIDTH, HEIGHT, 12);
   ctx.fill();
 
   // 2. إطار خارجي
-  ctx.strokeStyle = "#2A2D37";
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = "#6D765D";
+  ctx.lineWidth = 2;
   drawRoundedRect(ctx, 0.5, 0.5, WIDTH - 1, HEIGHT - 1, 12);
   ctx.stroke();
 
   // 3. الأفاتار
-  const leftPanelWidth = WIDTH * 0.7;
-  const avatarSize = 120;
-  const avatarX = 40;
+  const leftPanelWidth = WIDTH * 0.69;
+  const avatarSize = 132;
+  const avatarX = 48;
   const avatarY = (HEIGHT - avatarSize) / 2;
 
   try {
@@ -132,59 +136,65 @@ export async function generateRankCard(member: GuildMember, data: RankCardData):
     // تجاهل أخطاء الأفاتار
   }
 
+  ctx.strokeStyle = "#D9C9A6";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2 + 4, 0, Math.PI * 2);
+  ctx.stroke();
+
   const infoX = avatarX + avatarSize + 30;
 
   // 4. اسم المستخدم
-  ctx.fillStyle = "#FFFFFF";
-  ctx.font = `28px "${fontName}"`;
+  ctx.fillStyle = "#F4EFE2";
+  ctx.font = `30px "${fontName}"`;
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
   ctx.fillText(truncate(ctx, member.displayName || "User", 300), infoX, 35);
 
   // 5. العناوين (Labels)
   ctx.font = `12px "${fontName}"`;
-  ctx.fillStyle = "#8E9297";
-  const labelY = 85;
-  ctx.fillText("SERVER RANK", infoX, labelY);
-  ctx.fillText("WEEKLY RANK", infoX + 140, labelY);
-  ctx.fillText("WEEKLY EXP", infoX + 280, labelY);
+  ctx.fillStyle = "#C5BDAA";
+  const labelY = 104;
+  ctx.fillText("الترتيب في السيرفر", infoX, labelY);
+  ctx.fillText("إجمالي الخبرة", infoX + 230, labelY);
 
   // 6. القيم (Values)
   ctx.font = `18px "${fontName}"`;
-  ctx.fillStyle = "#FFFFFF";
-  const valueY = labelY + 22;
+  ctx.fillStyle = "#F4EFE2";
+  const valueY = labelY + 34;
   ctx.fillText(`#${data.rank ?? 1}`, infoX, valueY);
-  ctx.fillText("Off", infoX + 140, valueY);
-  ctx.fillText("0", infoX + 280, valueY);
+  ctx.fillText(`${(data.totalXp ?? 0).toLocaleString()} XP`, infoX + 230, valueY);
 
   // 7. شريط التقدم
-  const progressBarY = HEIGHT - 20;
-  const progressBarHeight = 6;
+  const progressBarY = HEIGHT - 32;
+  const progressBarHeight = 12;
   const progress = data.neededXp > 0 ? Math.min(Math.max(data.currentXp / data.neededXp, 0), 1) : 0;
 
-  ctx.fillStyle = "#1A1C23";
-  ctx.fillRect(40, progressBarY, leftPanelWidth - 60, progressBarHeight);
+  ctx.fillStyle = "rgba(8, 12, 9, 0.65)";
+  drawRoundedRect(ctx, 48, progressBarY, leftPanelWidth - 84, progressBarHeight, 6);
+  ctx.fill();
 
   if (progress > 0) {
-    ctx.fillStyle = "#F1E0C5";
-    ctx.fillRect(40, progressBarY, (leftPanelWidth - 60) * progress, progressBarHeight);
+    ctx.fillStyle = "#86A477";
+    drawRoundedRect(ctx, 48, progressBarY, Math.max(12, (leftPanelWidth - 84) * progress), progressBarHeight, 6);
+    ctx.fill();
   }
 
   // 8. اللوحة اليمنى
   const rightPanelX = leftPanelWidth;
   const rightPanelWidth = WIDTH - leftPanelWidth;
 
-  ctx.fillStyle = "#2A2D37";
+  ctx.fillStyle = "rgba(244, 239, 226, 0.18)";
   ctx.fillRect(rightPanelX - 1, 20, 1, HEIGHT - 40);
 
   // === صندوق LEVEL ===
   const levelBoxY = 25;
-  ctx.fillStyle = "#1A1C23";
+  ctx.fillStyle = "rgba(18, 22, 17, 0.58)";
   drawRoundedRect(ctx, rightPanelX + 20, levelBoxY, rightPanelWidth - 40, 75, 8);
   ctx.fill();
 
   ctx.font = `11px "${fontName}"`;
-  ctx.fillStyle = "#8E9297";
+  ctx.fillStyle = "#C5BDAA";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
   ctx.fillText("LEVEL", rightPanelX + 32, levelBoxY + 8);
@@ -195,19 +205,19 @@ export async function generateRankCard(member: GuildMember, data: RankCardData):
   ctx.fill();
 
   ctx.font = `20px "${fontName}"`;
-  ctx.fillStyle = "#FFFFFF";
+  ctx.fillStyle = "#F4EFE2";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(`${data.level ?? 0}`, rightPanelX + rightPanelWidth / 2, levelInnerBoxY + 17.5);
 
   // === صندوق EXP ===
   const expBoxY = levelBoxY + 90;
-  ctx.fillStyle = "#1A1C23";
+  ctx.fillStyle = "rgba(18, 22, 17, 0.58)";
   drawRoundedRect(ctx, rightPanelX + 20, expBoxY, rightPanelWidth - 40, 75, 8);
   ctx.fill();
 
   ctx.font = `11px "${fontName}"`;
-  ctx.fillStyle = "#8E9297";
+  ctx.fillStyle = "#C5BDAA";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
   ctx.fillText("EXP", rightPanelX + 32, expBoxY + 8);
@@ -218,10 +228,10 @@ export async function generateRankCard(member: GuildMember, data: RankCardData):
   ctx.fill();
 
   ctx.font = `14px "${fontName}"`;
-  ctx.fillStyle = "#FFFFFF";
+  ctx.fillStyle = "#F4EFE2";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(`${data.currentXp ?? 0} / ${data.neededXp ?? 0}`, rightPanelX + rightPanelWidth / 2, expInnerBoxY + 17.5);
+  ctx.fillText(`${data.currentXp ?? 0} / ${data.neededXp ?? 0} XP`, rightPanelX + rightPanelWidth / 2, expInnerBoxY + 17.5);
 
   return canvas.toBuffer("image/png");
 }
@@ -233,12 +243,15 @@ export async function generateSimpleRankCard(data: NewRankCardData): Promise<Buf
   const canvas = createCanvas(800, 200);
   const ctx = canvas.getContext("2d");
 
-  ctx.fillStyle = "#121318";
+  const gradient = ctx.createLinearGradient(0, 0, 800, 200);
+  gradient.addColorStop(0, "#17271D");
+  gradient.addColorStop(1, "#342A20");
+  ctx.fillStyle = gradient;
   drawRoundedRect(ctx, 0, 0, 800, 200, 12);
   ctx.fill();
 
-  ctx.strokeStyle = "#2A2D37";
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = "#6D765D";
+  ctx.lineWidth = 2;
   drawRoundedRect(ctx, 0.5, 0.5, 799, 199, 12);
   ctx.stroke();
 
@@ -261,34 +274,33 @@ export async function generateSimpleRankCard(data: NewRankCardData): Promise<Buf
 
   const infoX = avatarX + avatarSize + 30;
 
-  ctx.fillStyle = "#FFFFFF";
+  ctx.fillStyle = "#F4EFE2";
   ctx.font = `28px "${fontName}"`;
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
   ctx.fillText(truncate(ctx, data.username || "User", 300), infoX, 35);
 
   ctx.font = `16px "${fontName}"`;
-  ctx.fillStyle = "#8E9297";
-  ctx.fillText(`المستوى: ${data.level ?? 0}`, infoX, 75);
-  ctx.fillText(`الترتيب: #${data.serverRank ?? 1}`, infoX, 100);
+  ctx.fillStyle = "#C5BDAA";
+  ctx.fillText(`المستوى ${data.level ?? 0}   |   الترتيب #${data.serverRank ?? 1}`, infoX, 82);
 
   const progressBarY = 140;
   const progressBarWidth = 500;
   const progressBarHeight = 20;
   const progress = data.maxExp > 0 ? Math.min(Math.max(data.currentExp / data.maxExp, 0), 1) : 0;
 
-  ctx.fillStyle = "#1A1C23";
+  ctx.fillStyle = "rgba(8, 12, 9, 0.65)";
   drawRoundedRect(ctx, infoX, progressBarY, progressBarWidth, progressBarHeight, 10);
   ctx.fill();
 
   if (progress > 0) {
     const calculatedWidth = Math.max(progressBarWidth * progress, 15);
-    ctx.fillStyle = "#F1E0C5";
+    ctx.fillStyle = "#86A477";
     drawRoundedRect(ctx, infoX, progressBarY, calculatedWidth, progressBarHeight, 10);
     ctx.fill();
   }
 
-  ctx.fillStyle = "#FFFFFF";
+  ctx.fillStyle = "#F4EFE2";
   ctx.font = `14px "${fontName}"`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -308,9 +320,9 @@ export interface LeaderboardEntry {
 }
 
 const MEDAL_COLORS: Record<number, string> = {
-  1: "#FFD700",
-  2: "#C0C0C0",
-  3: "#CD7F32"
+  1: "#D9C9A6",
+  2: "#C5BDAA",
+  3: "#9C7658"
 };
 
 export async function generateLeaderboardCard(
@@ -339,7 +351,7 @@ export async function generateLeaderboardCard(
   ctx.fill();
 
   // إطار خارجي
-  ctx.strokeStyle = "#2A2D37";
+  ctx.strokeStyle = "#393B30";
   ctx.lineWidth = 1.5;
   drawRoundedRect(ctx, 0.75, 0.75, CARD_WIDTH - 1.5, CARD_HEIGHT - 1.5, RADIUS);
   ctx.stroke();
@@ -347,17 +359,17 @@ export async function generateLeaderboardCard(
   // ── ترويسة (Header) ───────────────────────────────────────────────────────
   const headerGrad = ctx.createLinearGradient(0, 0, CARD_WIDTH, HEADER_HEIGHT);
   headerGrad.addColorStop(0, "#1A1D27");
-  headerGrad.addColorStop(1, "#121318");
+  headerGrad.addColorStop(1, "#191B15");
   ctx.fillStyle = headerGrad;
   drawRoundedRect(ctx, 0, 0, CARD_WIDTH, HEADER_HEIGHT, RADIUS);
   ctx.fill();
 
   // مستطيل ذهبي جانبي
-  ctx.fillStyle = "#F1E0C5";
+  ctx.fillStyle = "#D9C9A6";
   ctx.fillRect(0, 0, 4, HEADER_HEIGHT);
 
   // خط فاصل أسفل الهيدر
-  ctx.strokeStyle = "#2A2D37";
+  ctx.strokeStyle = "#393B30";
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(0, HEADER_HEIGHT);
@@ -366,13 +378,13 @@ export async function generateLeaderboardCard(
 
   // عنوان
   ctx.font = `bold 26px "${fontName}"`;
-  ctx.fillStyle = "#FFFFFF";
+  ctx.fillStyle = "#F4EFE2";
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
   ctx.fillText("قائمة المتصدرين", 28, HEADER_HEIGHT / 2);
 
   ctx.font = `14px "${fontName}"`;
-  ctx.fillStyle = "#8E9297";
+  ctx.fillStyle = "#B8B09D";
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
   ctx.fillText(`أفضل ${entries.length} أعضاء`, CARD_WIDTH - 28, HEADER_HEIGHT / 2);
@@ -384,7 +396,7 @@ export async function generateLeaderboardCard(
     const isEven = i % 2 === 0;
 
     // خلفية الصف (متناوبة)
-    ctx.fillStyle = isEven ? "#121318" : "#0E1015";
+    ctx.fillStyle = isEven ? "#191B15" : "#0E1015";
     ctx.fillRect(1, rowY, CARD_WIDTH - 2, ROW_HEIGHT);
 
     // فاصل بين الصفوف
@@ -398,17 +410,16 @@ export async function generateLeaderboardCard(
     }
 
     const centerY = rowY + ROW_HEIGHT / 2;
-    const rankColor = MEDAL_COLORS[entry.rank] ?? "#8E9297";
+    const rankColor = MEDAL_COLORS[entry.rank] ?? "#B8B09D";
 
     // ── رقم / ميدالية الترتيب ──────────────────────────────────────────────
     const RANK_COL_X = 44;
     if (entry.rank <= 3) {
-      const medals = ["🥇", "🥈", "🥉"];
-      ctx.font = `22px "${fontName}"`;
+      ctx.font = `bold 16px "${fontName}"`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillStyle = rankColor;
-      ctx.fillText(medals[entry.rank - 1], RANK_COL_X, centerY);
+      ctx.fillText(`#${entry.rank}`, RANK_COL_X, centerY);
     } else {
       ctx.font = `bold 16px "${fontName}"`;
       ctx.textAlign = "center";
@@ -439,11 +450,11 @@ export async function generateLeaderboardCard(
         const avatar = await loadImage(entry.avatarUrl);
         ctx.drawImage(avatar, avatarX, avatarY, AVATAR_SIZE, AVATAR_SIZE);
       } catch {
-        ctx.fillStyle = "#1A1C23";
+        ctx.fillStyle = "#22241C";
         ctx.fillRect(avatarX, avatarY, AVATAR_SIZE, AVATAR_SIZE);
       }
     } else {
-      ctx.fillStyle = "#1A1C23";
+      ctx.fillStyle = "#22241C";
       ctx.fillRect(avatarX, avatarY, AVATAR_SIZE, AVATAR_SIZE);
     }
     ctx.restore();
@@ -451,26 +462,26 @@ export async function generateLeaderboardCard(
     // ── اسم المستخدم والمستوى ─────────────────────────────────────────────
     const nameX = avatarX + AVATAR_SIZE + AVATAR_MARGIN;
     ctx.font = `bold 19px "${fontName}"`;
-    ctx.fillStyle = "#FFFFFF";
+    ctx.fillStyle = "#F4EFE2";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     ctx.fillText(truncate(ctx, entry.username, 360), nameX, centerY - 10);
 
     ctx.font = `13px "${fontName}"`;
-    ctx.fillStyle = "#8E9297";
+    ctx.fillStyle = "#B8B09D";
     ctx.textBaseline = "middle";
     ctx.fillText(`المستوى ${entry.level}`, nameX, centerY + 12);
 
     // ── قيمة XP (يمين) ────────────────────────────────────────────────────
     ctx.font = `bold 16px "${fontName}"`;
-    ctx.fillStyle = "#F1E0C5";
+    ctx.fillStyle = "#D9C9A6";
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
     ctx.fillText(`${entry.totalXp.toLocaleString()} XP`, CARD_WIDTH - 28, centerY - 10);
 
     // نص "المجموع"
     ctx.font = `12px "${fontName}"`;
-    ctx.fillStyle = "#8E9297";
+    ctx.fillStyle = "#B8B09D";
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
     ctx.fillText("المجموع", CARD_WIDTH - 28, centerY + 12);
@@ -479,7 +490,7 @@ export async function generateLeaderboardCard(
   // ── فوتر ──────────────────────────────────────────────────────────────────
   const footerY = HEADER_HEIGHT + ROW_HEIGHT * entries.length;
 
-  ctx.strokeStyle = "#2A2D37";
+  ctx.strokeStyle = "#393B30";
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(0, footerY);
@@ -487,7 +498,7 @@ export async function generateLeaderboardCard(
   ctx.stroke();
 
   ctx.font = `13px "${fontName}"`;
-  ctx.fillStyle = "#8E9297";
+  ctx.fillStyle = "#B8B09D";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(guildName, CARD_WIDTH / 2, footerY + FOOTER_HEIGHT / 2);

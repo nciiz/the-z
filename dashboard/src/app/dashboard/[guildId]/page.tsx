@@ -67,15 +67,15 @@ export default async function GuildOverviewPage({ params }: { params: { guildId:
         >
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-[#9CA3AF]">الأعضاء النشطين</span>
-              <span className="text-sm font-medium text-[#F0F0F0]">{guild?.approximate_presence_count ?? "—"}</span>
+              <span className="text-sm text-[#B8B09D]">الأعضاء النشطين</span>
+              <span className="text-sm font-medium text-[#F4EFE2]">{guild?.approximate_presence_count ?? "—"}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-[#9CA3AF]">إجمالي الأعضاء</span>
-              <span className="text-sm font-medium text-[#F0F0F0]">{guild?.approximate_member_count ?? "—"}</span>
+              <span className="text-sm text-[#B8B09D]">إجمالي الأعضاء</span>
+              <span className="text-sm font-medium text-[#F4EFE2]">{guild?.approximate_member_count ?? "—"}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-[#9CA3AF]">النشاط</span>
+              <span className="text-sm text-[#B8B09D]">النشاط</span>
               <span className="text-sm font-medium text-[#10B981]">عالي</span>
             </div>
           </div>
@@ -88,15 +88,15 @@ export default async function GuildOverviewPage({ params }: { params: { guildId:
         >
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-[#9CA3AF]">نسبة التفعيل</span>
-              <span className="text-sm font-medium text-[#F0F0F0]">{Math.round((enabledCount / features.length) * 100)}%</span>
+              <span className="text-sm text-[#B8B09D]">نسبة التفعيل</span>
+              <span className="text-sm font-medium text-[#F4EFE2]">{Math.round((enabledCount / features.length) * 100)}%</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-[#9CA3AF]">الميزات الكلية</span>
-              <span className="text-sm font-medium text-[#F0F0F0]">{features.length}</span>
+              <span className="text-sm text-[#B8B09D]">الميزات الكلية</span>
+              <span className="text-sm font-medium text-[#F4EFE2]">{features.length}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-[#9CA3AF]">الحالة</span>
+              <span className="text-sm text-[#B8B09D]">الحالة</span>
               <span className="text-sm font-medium text-[#10B981]">نشط</span>
             </div>
           </div>
@@ -104,15 +104,15 @@ export default async function GuildOverviewPage({ params }: { params: { guildId:
       </div>
 
       <div>
-        <h2 className="mb-4 text-lg font-semibold text-[#F0F0F0]">الميزات</h2>
+        <h2 className="mb-4 text-lg font-semibold text-[#F4EFE2]">الميزات</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {features.map((f) => (
             <Link
               key={f.href}
               href={`/dashboard/${params.guildId}/${f.href}`}
-              className="card flex items-center justify-between transition hover:border-[#5865F2]"
+              className="card flex items-center justify-between transition hover:border-[#315C43]"
             >
-              <span className="font-medium text-[#F0F0F0]">{f.label}</span>
+              <span className="font-medium text-[#F4EFE2]">{f.label}</span>
               <span
                 className={`h-2.5 w-2.5 rounded-full ${f.enabled ? "bg-[#10B981]" : "bg-[#6B7280]"}`}
                 title={f.enabled ? "مفعّل" : "معطّل"}
@@ -129,10 +129,10 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: string |
   return (
     <div className="card">
       <div className="flex items-center justify-between mb-2">
-        <Icon className="h-4 w-4 text-[#9CA3AF]" />
-        <span className="text-xl font-bold text-[#F0F0F0]">{value}</span>
+        <Icon className="h-4 w-4 text-[#B8B09D]" />
+        <span className="text-xl font-bold text-[#F4EFE2]">{value}</span>
       </div>
-      <p className="text-xs text-[#9CA3AF]">{label}</p>
+      <p className="text-xs text-[#B8B09D]">{label}</p>
     </div>
   );
 }
@@ -141,12 +141,12 @@ function ActivityCard({ title, icon: Icon, description, children }: { title: str
   return (
     <div className="card">
       <div className="flex items-center gap-3 mb-4">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#5865F2]">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#315C43]">
           <Icon className="h-5 w-5 text-white" />
         </div>
         <div>
-          <h3 className="font-semibold text-[#F0F0F0]">{title}</h3>
-          <p className="text-xs text-[#9CA3AF]">{description}</p>
+          <h3 className="font-semibold text-[#F4EFE2]">{title}</h3>
+          <p className="text-xs text-[#B8B09D]">{description}</p>
         </div>
       </div>
       {children}
