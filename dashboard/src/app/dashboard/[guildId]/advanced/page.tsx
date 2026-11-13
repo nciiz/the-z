@@ -20,6 +20,7 @@ export default async function AdvancedPage({ params }: { params: { guildId: stri
   const cfg = (config as any) ?? {};
   const features = [
     { name: "التذاكر", on: !!cfg.tickets?.enabled },
+    { name: "لعبة العد", on: !!cfg.counting?.enabled },
     { name: "الترحيب", on: !!cfg.welcome?.enabled },
     { name: "المستويات", on: !!cfg.leveling?.enabled },
     { name: "الرقابة", on: !!cfg.automod?.enabled },

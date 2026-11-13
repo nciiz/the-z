@@ -39,7 +39,8 @@ const CHANNEL_PATHS = [
   ["starboard", "channelId"],
   ["reactionRoles", "channelId"],
   ["welcome", "channelId"],
-  ["leave", "channelId"]
+  ["leave", "channelId"],
+  ["counting", "channelId"]
 ];
 /** مسارات الرتب — اللاحقة [] تعني مصفوفة معرّفات */
 const ROLE_PATHS: string[][] = [
@@ -113,7 +114,7 @@ export async function getHealthData(guildId: string, deps: HealthDeps): Promise<
         { name: "إدارة القنوات", bit: 1n << 4n, when: !!config.tickets?.enabled || !!config.tempVoice?.enabled },
         { name: "إدارة الرتب", bit: 1n << 28n, when: !!config.captcha?.enabled || !!config.jail?.enabled || !!config.autoRole?.enabled || (config.antiNuke?.enabled && config.antiNuke.punishment === "stripRoles") },
         { name: "مهلة الأعضاء", bit: 1n << 40n, when: !!config.automod?.enabled },
-        { name: "إدارة الرسائل", bit: 1n << 13n, when: !!config.automod?.enabled },
+        { name: "إدارة الرسائل", bit: 1n << 13n, when: !!config.automod?.enabled || !!config.counting?.enabled },
         { name: "طرد الأعضاء", bit: 1n << 1n, when: !!config.captcha?.enabled || (config.antiNuke?.enabled && config.antiNuke.punishment === "kick") },
         { name: "حظر الأعضاء", bit: 1n << 2n, when: !!config.antiNuke?.enabled && config.antiNuke.punishment === "ban" }
       ];

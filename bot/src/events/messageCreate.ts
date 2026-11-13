@@ -14,17 +14,22 @@ import { checkCommandCooldown, applyCommandCooldown } from "../utils/cooldown";
 import { sendMediaLog } from "../modules/logging/logger";
 import { handleGifBlock } from "../modules/gifBlock/gifBlock";
 import { AfkUser } from "@thez/shared";
+import { handleCountingMessage } from "../modules/counting/countingManager";
 
 const event: BotEvent = {
   name: "messageCreate",
   async execute(client, message: Message) {
     if (message.author.bot || !message.guild) return;
 
+    const gConfig = await getGuildConfig(client, message.guild.id);
+
+    // قناة العد مخصصة للعبة: لا تمر رسائلها إلى الأوامر أو بقية أنظمة الرسائل.
+    const wasCounting = await handleCountingMessage(message, gConfig);
+    if (wasCounting) return;
+
     // 1) أوامر البادئة الثابتة (,tr | ,afk | ,avatar | ,banner | ,jail | ,unjail)
     const wasLegacy = await handleLegacyPrefixCommands(client, message);
     if (wasLegacy) return;
-
-    const gConfig = await getGuildConfig(client, message.guild.id);
 
     // 1.5) نظام الاقتراحات — تحويل رسائل قناة الاقتراحات إلى صور
     const wasSuggestion = await handleSuggestionMessage(message);

@@ -23,6 +23,7 @@ import {
   BarChart3,
   History,
   Hash,
+  ListOrdered,
   Smile,
   Star,
   Activity,
@@ -80,6 +81,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/reaction-roles", label: "رولات الرياكشن", icon: Smile },
       { href: "/voice", label: "الرومات الصوتية", icon: Mic },
       { href: "/member-counter", label: "عداد الأعضاء", icon: Hash },
+      { href: "/counting", label: "لعبة العد", icon: ListOrdered },
       { href: "/tickets", label: "نظام التذاكر", icon: Ticket }
     ]
   },

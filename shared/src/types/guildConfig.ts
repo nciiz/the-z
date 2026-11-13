@@ -394,6 +394,16 @@ export interface IGuildConfig {
     format: string;
   };
 
+  /** لعبة العد التسلسلي في قناة نصية مخصصة */
+  counting: {
+    enabled: boolean;
+    channelId?: string;
+    startingNumber: number;
+    resetOnWrong: boolean;
+    preventConsecutive: boolean;
+    deleteInvalidMessages: boolean;
+  };
+
   /** رسائل مجدولة تُرسل تلقائيًا حسب الوقت */
   scheduledMessages: IScheduledMessage[];
 
@@ -652,6 +662,14 @@ export function createDefaultGuildConfig(guildId: string): IGuildConfig {
     memberCounter: {
       enabled: false,
       format: "الأعضاء: {count}"
+    },
+
+    counting: {
+      enabled: false,
+      startingNumber: 1,
+      resetOnWrong: true,
+      preventConsecutive: true,
+      deleteInvalidMessages: true
     },
 
     scheduledMessages: [],
