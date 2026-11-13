@@ -2,10 +2,13 @@ import { Client, Collection, GatewayIntentBits, Partials, REST } from "discord.j
 import { createCooldownStore, CooldownStore } from "@thez/shared";
 import { BotCommand } from "./types/command";
 import { BotContextMenu } from "./types/contextMenu";
+import { LavalinkManager } from "lavalink-client";
 // @ts-ignore - optional dependency for Render proxy
 import { HttpsProxyAgent } from "https-proxy-agent";
 
 export class ExtendedClient extends Client {
+  /** Lavalink voice/music node manager (optional in local development). */
+  lavalink?: LavalinkManager;
   commands: Collection<string, BotCommand> = new Collection();
 
   /** أوامر قائمة السياق (زر الفأرة الأيمن) — رسائل حاليًا */

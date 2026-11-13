@@ -1,235 +1,227 @@
-import { AudioPlayer, AudioPlayerStatus, createAudioPlayer, createAudioResource, getVoiceConnection, joinVoiceChannel, NoSubscriberBehavior, StreamType, VoiceConnection } from "@discordjs/voice";
-import { ChannelType, EmbedBuilder, Guild, TextChannel } from "discord.js";
-import { Readable } from "node:stream";
+import { EmbedBuilder, Guild, TextChannel } from "discord.js";
+import { LavalinkManager, Player } from "lavalink-client";
+import { ExtendedClient } from "../../client";
+import { logInfo } from "../../utils/logger";
 
-export interface MusicTrack {
-  id: string;
-  name: string;
-  artist_name: string;
-  album_name?: string;
-  duration: number;
-  audio: string;
-  shareurl: string;
-  image?: string;
-  license_ccurl?: string;
-}
+const nodeReady = new WeakMap<ExtendedClient, boolean>();
 
-interface QueueItem { track: MusicTrack; textChannelId: string; requestedBy: string; }
-interface GuildPlayer { player: AudioPlayer; queue: QueueItem[]; connection: VoiceConnection; stream?: Readable; controller?: AbortController; starting: boolean; current?: QueueItem; }
-const sessions = new Map<string, GuildPlayer>();
-
-async function requestTracks(parameters: Record<string, string>): Promise<MusicTrack[]> {
-  const clientId = process.env.JAMENDO_CLIENT_ID?.trim();
-  if (!clientId) throw new Error("MISSING_JAMENDO_CLIENT_ID");
-  const url = new URL("https://api.jamendo.com/v3.0/tracks/");
-  url.search = new URLSearchParams({
-    client_id: clientId,
-    format: "json",
-    limit: "10",
-    audioformat: "mp32",
-    include: "licenses",
-    ...parameters
-  }).toString();
-  const response = await fetch(url, { signal: AbortSignal.timeout(12_000) });
-  if (!response.ok) throw new Error(`JAMENDO_HTTP_${response.status}`);
-  const payload = await response.json() as { headers?: { status?: string }; results?: MusicTrack[] };
-  if (payload.headers?.status !== "success") throw new Error("JAMENDO_API_ERROR");
-  return (payload.results ?? []).filter((track) => track.audio && track.name && track.artist_name && track.shareurl);
-}
-
-export async function searchTracks(query: string): Promise<MusicTrack[]> {
-  return requestTracks({ search: query.slice(0, 120) });
-}
-
-export async function getTrackFromLink(link: string): Promise<MusicTrack | null> {
-  let parsed: URL;
-  try { parsed = new URL(link); } catch { return null; }
-  const host = parsed.hostname.toLowerCase();
-  if (parsed.protocol !== "https:" || !(host === "jamendo.com" || host.endsWith(".jamendo.com"))) {
-    throw new Error("UNSUPPORTED_AUDIO_LINK");
+/** Starts the Lavalink v4 client and forwards Discord voice gateway packets to it. */
+export function initializeLavalink(client: ExtendedClient): void {
+  const host = process.env.LAVALINK_HOST?.trim();
+  const password = process.env.LAVALINK_PASSWORD?.trim();
+  if (!host || !password) {
+    logInfo("music", "Lavalink is not configured; music commands will report the missing node.");
+    return;
   }
-  const match = parsed.pathname.match(/^\/track\/(\d+)(?:\/|$)/);
-  if (!match) throw new Error("UNSUPPORTED_AUDIO_LINK");
-  const tracks = await requestTracks({ id: match[1], limit: "1" });
-  return tracks[0] ?? null;
+
+  const manager = new LavalinkManager({
+    nodes: [{
+      id: "main",
+      host,
+      port: Number(process.env.LAVALINK_PORT || 2333),
+      authorization: password,
+      secure: process.env.LAVALINK_SECURE === "true",
+      retryAmount: 10,
+      retryDelay: 5_000
+    }],
+    sendToShard: (guildId, payload) => client.guilds.cache.get(guildId)?.shard?.send(payload),
+    client: { id: process.env.DISCORD_CLIENT_ID || "", username: "The Z" },
+    autoSkip: true,
+    linksAllowed: true,
+    playerOptions: {
+      defaultSearchPlatform: "ytsearch",
+      onDisconnect: { autoReconnect: true, destroyPlayer: false },
+      onEmptyQueue: { destroyAfterMs: 60_000 }
+    }
+  });
+  client.lavalink = manager;
+  nodeReady.set(client, false);
+
+  // Lavalink's client library handles Discord DAVE voice encryption and voice state updates.
+  client.on("raw" as any, (packet: any) => manager.sendRawData(packet));
+  manager.nodeManager.on("connect", (node) => {
+    nodeReady.set(client, true);
+    logInfo("music", `Lavalink node connected: ${node.id}`);
+  });
+  manager.nodeManager.on("disconnect", (node) => {
+    nodeReady.set(client, false);
+    logInfo("music", `Lavalink node disconnected: ${node.id}`);
+  });
+  manager.nodeManager.on("error", (_node, error) => {
+    console.warn("[music/lavalink] Node error:", error.message);
+  });
+  manager.on("trackStart", async (player, track) => {
+    const channel = client.channels.cache.get(player.textChannelId) as TextChannel | undefined;
+    if (!channel?.isTextBased() || !("send" in channel)) return;
+    const title = track.info.title.slice(0, 240);
+    const description = track.info.uri ? `[${title}](${track.info.uri})` : title;
+    const embed = new EmbedBuilder()
+      .setColor(0x315c43)
+      .setTitle("يعمل الآن")
+      .setDescription(`${description}\n${track.info.author || "YouTube"}`)
+      .addFields({ name: "المدة", value: formatDuration(track.info.duration), inline: true });
+    if (track.info.artworkUrl) embed.setThumbnail(track.info.artworkUrl);
+    await channel.send({ embeds: [embed] }).catch(() => undefined);
+  });
+
+  client.once("ready", () => {
+    if (client.user) manager.init({ ...client.user });
+  });
 }
 
-export async function getSpotifyTrackTitle(link: string): Promise<string | null> {
-  let parsed: URL;
-  try { parsed = new URL(link); } catch { return null; }
-  const host = parsed.hostname.toLowerCase();
-  if (parsed.protocol !== "https:" || !["open.spotify.com", "www.spotify.com"].includes(host)) {
-    throw new Error("UNSUPPORTED_AUDIO_LINK");
-  }
-  const match = parsed.pathname.match(/^\/(?:intl-[a-z]{2}\/)?track\/([A-Za-z0-9]+)\/?$/i);
-  if (!match) throw new Error("UNSUPPORTED_SPOTIFY_LINK");
+function formatDuration(milliseconds: number): string {
+  if (!Number.isFinite(milliseconds) || milliseconds <= 0) return "بث مباشر";
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, "0")}`;
+}
 
-  const canonicalUrl = `https://open.spotify.com/track/${match[1]}`;
+export function isLavalinkReady(client: ExtendedClient): boolean {
+  return !!client.lavalink && nodeReady.get(client) === true;
+}
+
+export function isMusicActive(guildId: string, client?: ExtendedClient): boolean {
+  const manager = client?.lavalink;
+  const player = manager?.getPlayer(guildId);
+  return !!player && (player.playing || player.paused || player.queue.tracks.length > 0);
+}
+
+async function spotifyTrackTitle(link: string): Promise<string> {
+  const parsed = new URL(link);
+  if (parsed.protocol !== "https:" || !["open.spotify.com", "www.spotify.com"].includes(parsed.hostname.toLowerCase())) {
+    throw new Error("UNSUPPORTED_MUSIC_LINK");
+  }
+  const trackMatch = parsed.pathname.match(/^\/(?:intl-[a-z]{2}\/)?track\/([A-Za-z0-9]+)\/?$/i);
+  if (!trackMatch) throw new Error("SPOTIFY_TRACK_URL_REQUIRED");
+  const canonicalUrl = `https://open.spotify.com/track/${trackMatch[1]}`;
   const response = await fetch(`https://open.spotify.com/oembed?${new URLSearchParams({ url: canonicalUrl })}`, {
     signal: AbortSignal.timeout(12_000)
   });
-  if (!response.ok) throw new Error(`SPOTIFY_TRACK_HTTP_${response.status}`);
-  const metadata = await response.json() as { title?: string; provider_name?: string };
-  return metadata.provider_name === "Spotify" ? metadata.title?.trim() || null : null;
+  if (!response.ok) throw new Error(`SPOTIFY_OEMBED_HTTP_${response.status}`);
+  const metadata = await response.json() as { provider_name?: string; title?: string; author_name?: string };
+  if (metadata.provider_name !== "Spotify" || !metadata.title?.trim()) throw new Error("SPOTIFY_TITLE_UNAVAILABLE");
+  const artist = metadata.author_name?.trim();
+  return artist && artist.toLowerCase() !== "spotify"
+    ? `${metadata.title.trim()} ${artist}`
+    : metadata.title.trim();
 }
 
-function normalizeMusicName(value: string): string {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]+/g, "").trim();
-}
-
-export async function findJamendoMatches(title: string): Promise<MusicTrack[]> {
-  const results = await searchTracks(title);
-  const expectedName = normalizeMusicName(title);
-  return results.filter((candidate) => normalizeMusicName(candidate.name) === expectedName).slice(0, 5);
-}
-
-function formatDuration(seconds: number): string {
-  const safe = Math.max(0, Math.floor(seconds || 0));
-  return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, "0")}`;
-}
-
-function trackEmbed(track: MusicTrack, requestedBy: string, queued = false): EmbedBuilder {
-  const embed = new EmbedBuilder()
-    .setColor(0x315c43)
-    .setTitle(queued ? "أُضيفت إلى قائمة التشغيل" : "يعمل الآن")
-    .setDescription(`**[${track.name}](${track.shareurl})**\n${track.artist_name}${track.album_name ? ` · ${track.album_name}` : ""}`)
-    .addFields(
-      { name: "المدة", value: formatDuration(track.duration), inline: true },
-      { name: "طلبها", value: `<@${requestedBy}>`, inline: true },
-      { name: "الترخيص", value: track.license_ccurl ? `[Creative Commons](${track.license_ccurl})` : "صفحة الفنان", inline: true },
-      { name: "المصدر", value: `[Jamendo · صفحة المسار](${track.shareurl})` }
-    );
-  if (track.image) embed.setThumbnail(track.image);
-  return embed;
-}
-
-async function notify(guild: Guild, item: QueueItem, queued = false): Promise<void> {
-  const channel = await guild.channels.fetch(item.textChannelId).catch(() => null);
-  if (channel?.type === ChannelType.GuildText) await (channel as TextChannel).send({ embeds: [trackEmbed(item.track, item.requestedBy, queued)] }).catch(() => undefined);
-}
-
-async function playNext(guild: Guild, session: GuildPlayer): Promise<void> {
-  if (session.starting) return;
-  const item = session.queue.shift();
-  if (!item) return;
-  session.starting = true;
+function isYouTubeUrl(value: string): boolean {
   try {
-    const controller = new AbortController();
-    session.controller = controller;
-    const timeout = setTimeout(() => controller.abort(new Error("Audio stream timeout")), 20_000);
-    const response = await fetch(item.track.audio, { signal: controller.signal, redirect: "follow" }).finally(() => clearTimeout(timeout));
-    if (!response.ok || !response.body) throw new Error(`AUDIO_HTTP_${response.status}`);
-    // بث مباشر من المصدر: لا نحفظ المسار محليًا ولا نعيد استخدام رابط البث بعد انتهاء الطلب.
-    session.stream = Readable.fromWeb(response.body as any);
-    if (controller.signal.aborted) throw new Error("Playback cancelled");
-    session.current = item;
-    session.player.play(createAudioResource(session.stream, { inputType: StreamType.Arbitrary, inlineVolume: true }));
-    session.starting = false;
-    session.controller = undefined;
-    await notify(guild, item);
-  } catch (error) {
-    session.starting = false;
-    session.controller = undefined;
-    session.stream?.destroy();
-    session.stream = undefined;
-    session.current = undefined;
-    const channel = await guild.channels.fetch(item.textChannelId).catch(() => null);
-    if (channel?.type === ChannelType.GuildText) {
-      await (channel as TextChannel).send("تعذر تشغيل هذا المسار من المصدر. تخطّيته وحاولت تشغيل التالي.").catch(() => undefined);
-    }
-    console.warn(`[music] stream failed for ${guild.id}:`, error);
-    void playNext(guild, session);
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    return url.protocol === "https:" && (
+      host === "youtu.be" || host === "youtube.com" || host.endsWith(".youtube.com")
+    );
+  } catch {
+    return false;
   }
 }
 
-function getSession(guild: Guild, voiceChannelId: string, textChannelId: string): GuildPlayer {
-  let session = sessions.get(guild.id);
-  let connection = getVoiceConnection(guild.id);
-  if (!connection || connection.joinConfig.channelId !== voiceChannelId) {
-    connection = joinVoiceChannel({
-      channelId: voiceChannelId,
+async function getOrCreatePlayer(client: ExtendedClient, guild: Guild, voiceChannelId: string, textChannelId: string): Promise<Player> {
+  const manager = client.lavalink;
+  if (!manager || !isLavalinkReady(client)) throw new Error("LAVALINK_NOT_READY");
+  let player = manager.getPlayer(guild.id);
+  if (player && player.voiceChannelId && player.voiceChannelId !== voiceChannelId) {
+    if (player.playing || player.queue.tracks.length > 0) throw new Error("BOT_IN_ANOTHER_VOICE_CHANNEL");
+    await player.destroy("voice-channel-change", true);
+    player = undefined;
+  }
+  if (!player) {
+    player = manager.createPlayer({
       guildId: guild.id,
-      adapterCreator: guild.voiceAdapterCreator,
-      selfDeaf: true
+      voiceChannelId,
+      textChannelId,
+      selfDeaf: true,
+      volume: 100
     });
   }
-  if (session && session.connection !== connection) {
-    session.stream?.destroy();
-    session.player.stop(true);
-    sessions.delete(guild.id);
-    session = undefined;
+  await player.connect();
+  return player;
+}
+
+export async function enqueueMusic(
+  client: ExtendedClient,
+  guild: Guild,
+  voiceChannelId: string,
+  textChannelId: string,
+  requester: unknown,
+  input: string
+): Promise<{ title: string; position: number; playlistSize: number }> {
+  const player = await getOrCreatePlayer(client, guild, voiceChannelId, textChannelId);
+  let query = input.trim().replace(/^<|>$/g, "");
+  if (/^https?:\/\//i.test(query)) {
+    if (/^https:\/\/(?:open\.spotify\.com|www\.spotify\.com)\//i.test(query)) {
+      const title = await spotifyTrackTitle(query);
+      query = `ytsearch:${title}`;
+    } else if (!isYouTubeUrl(query)) {
+      throw new Error("UNSUPPORTED_MUSIC_LINK");
+    }
+  } else {
+    query = `ytsearch:${query}`;
   }
-  if (!session) {
-    const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Stop } });
-    session = { player, queue: [], connection, starting: false };
-    sessions.set(guild.id, session);
-    connection.subscribe(player);
-    player.on(AudioPlayerStatus.Idle, () => {
-      session!.stream = undefined;
-      session!.current = undefined;
-      void playNext(guild, session!);
-    });
-    player.on("error", (error) => {
-      console.warn(`[music] player error for ${guild.id}:`, error.message);
-      session!.stream?.destroy();
-      session!.stream = undefined;
-      session!.current = undefined;
-      void playNext(guild, session!);
-    });
-  }
-  return session;
+
+  const result = await player.search({ query }, requester);
+  const tracks = result.tracks ?? [];
+  if (!tracks.length) throw new Error("TRACK_NOT_FOUND");
+  // A text search returns many candidates; enqueue only the best match.
+  // Playlist URLs are intentionally disabled in the YouTube plugin config.
+  const selectedTracks = tracks.slice(0, 1);
+  const playlistSize = selectedTracks.length;
+  const position = await player.queue.add(selectedTracks);
+  if (!player.playing) await player.play();
+  return { title: tracks[0].info.title, position, playlistSize };
 }
 
-export async function enqueueTrack(guild: Guild, voiceChannelId: string, textChannelId: string, requestedBy: string, track: MusicTrack): Promise<number> {
-  const session = getSession(guild, voiceChannelId, textChannelId);
-  session.queue.push({ track, textChannelId, requestedBy });
-  const position = session.queue.length;
-  if (session.player.state.status === AudioPlayerStatus.Idle && !session.starting) void playNext(guild, session);
-  else await notify(guild, { track, textChannelId, requestedBy }, true);
-  return position;
+export function getMusicPlayer(client: ExtendedClient, guildId: string): Player | undefined {
+  return client.lavalink?.getPlayer(guildId);
 }
 
-export function skipTrack(guildId: string): boolean {
-  const session = sessions.get(guildId);
-  if (!session) return false;
-  const wasStarting = session.starting;
-  session.controller?.abort();
-  session.controller = undefined;
-  session.stream?.destroy();
-  session.stream = undefined;
-  return session.player.stop(true) || wasStarting;
-}
-
-export function pauseTrack(guildId: string): boolean { return sessions.get(guildId)?.player.pause() ?? false; }
-export function resumeTrack(guildId: string): boolean { return sessions.get(guildId)?.player.unpause() ?? false; }
-
-export function stopPlayback(guildId: string): boolean {
-  const session = sessions.get(guildId);
-  if (!session) return false;
-  session.queue = [];
-  session.controller?.abort();
-  session.controller = undefined;
-  session.stream?.destroy();
-  session.stream = undefined;
-  session.player.stop(true);
-  session.connection.destroy();
-  sessions.delete(guildId);
+export async function skipTrack(client: ExtendedClient, guildId: string): Promise<boolean> {
+  const player = getMusicPlayer(client, guildId);
+  if (!player?.playing) return false;
+  await player.skip(0, false);
   return true;
 }
 
-export function getQueue(guildId: string): MusicTrack[] { return (sessions.get(guildId)?.queue ?? []).map((item) => item.track); }
-export function queueEmbed(guildId: string): EmbedBuilder {
-  const session = sessions.get(guildId);
-  const queue = session?.queue ?? [];
-  const embed = new EmbedBuilder().setColor(0x315c43).setTitle("قائمة التشغيل")
-    .setDescription(queue.length ? queue.slice(0, 10).map((item, index) => `**${index + 1}.** [${item.track.name}](${item.track.shareurl}) · ${item.track.artist_name} · ${formatDuration(item.track.duration)}`).join("\n") : "لا توجد مسارات بانتظار التشغيل.")
-    .setFooter({ text: `${queue.length} مسار في الانتظار` });
-  if (session?.current) embed.addFields({ name: "يعمل الآن", value: `[${session.current.track.name}](${session.current.track.shareurl}) · ${session.current.track.artist_name}` });
-  return embed;
+export async function pauseTrack(client: ExtendedClient, guildId: string): Promise<boolean> {
+  const player = getMusicPlayer(client, guildId);
+  if (!player?.playing || player.paused) return false;
+  await player.pause();
+  return true;
 }
 
-/** يمنع نظام البقاء في الروم من نقل البوت أثناء تشغيل الموسيقى أو وجود مسارات منتظرة. */
-export function isMusicActive(guildId: string): boolean {
-  const session = sessions.get(guildId);
-  return !!session && (session.starting || session.queue.length > 0 || session.player.state.status !== AudioPlayerStatus.Idle);
+export async function resumeTrack(client: ExtendedClient, guildId: string): Promise<boolean> {
+  const player = getMusicPlayer(client, guildId);
+  if (!player?.paused) return false;
+  await player.resume();
+  return true;
+}
+
+export async function stopPlayback(client: ExtendedClient, guildId: string): Promise<boolean> {
+  const player = getMusicPlayer(client, guildId);
+  if (!player) return false;
+  await player.destroy("music-stop", true);
+  return true;
+}
+
+export function queueEmbed(client: ExtendedClient, guildId: string): EmbedBuilder {
+  const player = getMusicPlayer(client, guildId);
+  const queue = player?.queue.tracks ?? [];
+  const embed = new EmbedBuilder()
+    .setColor(0x315c43)
+    .setTitle("قائمة التشغيل")
+    .setDescription(queue.length
+      ? queue.slice(0, 10).map((track, index) => {
+        const title = track.info.title.slice(0, 100);
+        const label = track.info.uri ? `[${title}](${track.info.uri})` : title;
+        return `**${index + 1}.** ${label} · ${track.info.author || "YouTube"} · ${formatDuration(track.info.duration)}`;
+      }).join("\n")
+      : "لا توجد مسارات بانتظار التشغيل.")
+    .setFooter({ text: `${queue.length} مسار في الانتظار` });
+  const current = player?.queue.current;
+  if (current) {
+    const title = current.info.title.slice(0, 180);
+    embed.addFields({ name: "يعمل الآن", value: current.info.uri ? `[${title}](${current.info.uri})` : title });
+  }
+  return embed;
 }

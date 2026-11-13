@@ -4,6 +4,7 @@
 // ============================================================
 const { spawn } = require("child_process");
 const http = require("http");
+const crypto = require("crypto");
 let resolveNextAuthUrl;
 try {
   ({ resolveNextAuthUrl } = require("./scripts/env-url"));
@@ -16,6 +17,7 @@ const PORT = process.env.PORT || 3000;
 
 let botReady = false;
 let dashboardProc = null;
+let lavalinkProc = null;
 let dashboardSpawned = false;
 
 const healthServer = http.createServer((req, res) => {
@@ -78,6 +80,67 @@ function attachDashboardHandlers() {
   });
 }
 
+function startLavalink() {
+  process.env.LAVALINK_HOST ||= "127.0.0.1";
+  process.env.LAVALINK_PORT ||= "2333";
+  process.env.LAVALINK_PASSWORD ||= crypto.randomBytes(32).toString("hex");
+
+  console.log("[SYSTEM] 🎵 Starting local Lavalink node...");
+  lavalinkProc = spawn("java", [
+    "-Xms32m",
+    "-Xmx128m",
+    "-XX:MaxMetaspaceSize=80m",
+    "-XX:MaxDirectMemorySize=48m",
+    "-XX:+UseSerialGC",
+    "-jar",
+    "/app/lavalink/Lavalink.jar"
+  ], {
+    cwd: "/app/lavalink",
+    stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env }
+  });
+
+  lavalinkProc.stdout.on("data", (d) => print("LAVA", d));
+  lavalinkProc.stderr.on("data", (d) => print("LAVA", d));
+  lavalinkProc.on("error", (error) => {
+    console.error("[LAVA] ❌ تعذر تشغيل Java/Lavalink:", error.message);
+    lavalinkProc = null;
+  });
+  lavalinkProc.on("exit", (code) => {
+    console.log(`[LAVA] ❌ Lavalink stopped (${code ?? "null"})`);
+    lavalinkProc = null;
+  });
+
+  return new Promise((resolve) => {
+    const startedAt = Date.now();
+    const poll = async () => {
+      if (!lavalinkProc) {
+        console.log("[SYSTEM] ⚠️ Lavalink stopped before becoming ready; bot will start without music.");
+        resolve(false);
+        return;
+      }
+      try {
+        const response = await fetch(`http://127.0.0.1:${process.env.LAVALINK_PORT}/version`, {
+          headers: { Authorization: process.env.LAVALINK_PASSWORD },
+          signal: AbortSignal.timeout(2_000)
+        });
+        if (response.ok) {
+          console.log(`[SYSTEM] ✅ Lavalink ready (v${(await response.text()).trim()})`);
+          resolve(true);
+          return;
+        }
+      } catch {}
+      if (Date.now() - startedAt >= 90_000) {
+        console.log("[SYSTEM] ⚠️ Lavalink startup timed out; bot will start and music will retry the node.");
+        resolve(false);
+        return;
+      }
+      setTimeout(poll, 1_500);
+    };
+    poll();
+  });
+}
+
 // ============================================================
 // البوت
 // ============================================================
@@ -104,6 +167,7 @@ function startBot() {
   bot.on("exit", (code) => {
     console.log(`[BOT] ❌ توقف بكود ${code ?? "null"}`);
     if (dashboardProc) dashboardProc.kill("SIGTERM");
+    if (lavalinkProc) lavalinkProc.kill("SIGTERM");
     process.exit(code ?? 1);
   });
 }
@@ -112,6 +176,7 @@ function startBot() {
 // تسلسل الإقلاع: deploy → bot → dashboard
 // ============================================================
 async function main() {
+  await startLavalink();
   console.log("[SYSTEM] 🔍 فحص الوصول إلى Discord (IPv4)...");
   try {
     const t0 = Date.now();
@@ -195,6 +260,7 @@ main().catch((err) => {
 // ============================================================
 function shutdown(signal) {
   console.log(`[SYSTEM] ⚠️ ${signal} — إيقاف تدريجي...`);
+  if (lavalinkProc) lavalinkProc.kill("SIGTERM");
   healthServer.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 2000).unref();
 }

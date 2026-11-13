@@ -3,7 +3,7 @@ import { joinVoiceChannel, getVoiceConnection } from "@discordjs/voice";
 import { ExtendedClient } from "../../client";
 import { getGuildConfig } from "../../utils/guildConfig";
 import { logError, logInfo } from "../../utils/logger";
-import { isMusicActive } from "../music/musicManager";
+import { isLavalinkReady, isMusicActive } from "../music/musicManager";
 
 /**
  * ميزة "البوت المقيم": البوت يبقى في روم صوتي محدد يُضبط من الداشبورد
@@ -16,7 +16,7 @@ const scheduled = new Set<string>();
 
 async function reconcileGuild(client: ExtendedClient, guildId: string): Promise<void> {
   try {
-    if (isMusicActive(guildId)) return;
+    if (isMusicActive(guildId, client)) return;
     const gConfig = await getGuildConfig(client, guildId);
     const cfg = gConfig?.alwaysVoice;
     if (!cfg?.enabled || !cfg.channelId) return;
@@ -32,6 +32,28 @@ async function reconcileGuild(client: ExtendedClient, guildId: string): Promise<
 
     const me = guild.members.me;
     const inTarget = me?.voice.channelId === channel.id;
+
+    // When Lavalink is enabled, it must own voice connections so Discord voice
+    // gateway state and DAVE encryption remain synchronized with the player.
+    if (client.lavalink) {
+      if (!isLavalinkReady(client)) return;
+      const manager = client.lavalink;
+      let player = manager.getPlayer(guildId);
+      if (player?.voiceChannelId === channel.id) return;
+      if (player && (player.playing || player.queue.tracks.length > 0)) return;
+      if (player) await player.destroy("always-voice-channel-change", true);
+      player = manager.createPlayer({
+        guildId,
+        voiceChannelId: channel.id,
+        textChannelId: channel.id,
+        selfDeaf: true,
+        volume: 100
+      });
+      await player.connect();
+      logInfo("alwaysVoice", `✅ دخل البوت إلى ${channel.name} (${guild.name})`);
+      return;
+    }
+
     if (inTarget && getVoiceConnection(guildId)) return;
 
     joinVoiceChannel({

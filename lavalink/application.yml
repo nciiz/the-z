@@ -1,0 +1,35 @@
+server:
+  address: 127.0.0.1
+  port: 2333
+
+lavalink:
+  plugins:
+    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.2"
+      snapshot: false
+  server:
+    password: ${LAVALINK_PASSWORD}
+    sources:
+      youtube: false
+    bufferDurationMs: 400
+    frameBufferDurationMs: 5000
+    opusEncodingQuality: 5
+    playerUpdateInterval: 5
+
+plugins:
+  youtube:
+    enabled: true
+    allowSearch: true
+    allowDirectVideoIds: true
+    allowDirectPlaylistIds: false
+    clients:
+      - WEB
+      - WEBEMBEDDED
+      - MUSIC
+
+logging:
+  level:
+    root: INFO
+    lavalink: INFO
+  file:
+    path: ./logs/
+    max-history: 1

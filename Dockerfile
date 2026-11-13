@@ -1,11 +1,16 @@
 FROM node:20-alpine
 
 # ffmpeg و python لـ yt-dlp (تحميل تيك توك/انستا/تويتر)
-RUN apk add --no-cache ffmpeg python3 py3-pip && pip3 install --no-cache-dir yt-dlp --break-system-packages
+RUN apk add --no-cache ca-certificates ffmpeg python3 py3-pip openjdk21-jre-headless && pip3 install --no-cache-dir yt-dlp --break-system-packages
 
 WORKDIR /app
 
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# Lavalink with the YouTube source plugin. The node stays loopback-only inside this container.
+RUN mkdir -p /app/lavalink
+COPY lavalink/application.yml /app/lavalink/application.yml
+RUN wget -q https://github.com/lavalink-devs/Lavalink/releases/download/4.2.2/Lavalink.jar -O /app/lavalink/Lavalink.jar
 
 # Copy root package.json + lockfile for workspaces
 # (اللوك فايل يجعل تثبيت الحزم حتميًا وقابلًا لإعادة الإنتاج)

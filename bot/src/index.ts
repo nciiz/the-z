@@ -5,6 +5,7 @@ import { loadCommands } from "./handlers/commandHandler";
 import { loadContextMenus } from "./handlers/contextMenuHandler";
 import { loadEvents } from "./handlers/eventHandler";
 import { registerAllModules } from "./modules";
+import { initializeLavalink } from "./modules/music/musicManager";
 import { logError, logInfo, sanitizeError } from "./utils/logger";
 import dns from "node:dns";
 // @ts-ignore - optional dependency for Render proxy
@@ -98,6 +99,7 @@ async function bootstrap() {
   }
 
   client = new ExtendedClient();
+  initializeLavalink(client);
 
   // أخطاء عميل Discord العابرة (فقدان اتصال، راتينج...) — لا تُسقط العملية
   client.on("error", (err) => {
