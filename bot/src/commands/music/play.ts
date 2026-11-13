@@ -7,7 +7,7 @@ const command: BotCommand = {
   description: "شغّل رابط مسار Jamendo أو ابحث باسم المسار",
   category: "الموسيقى",
   guildOnly: true,
-  options: [{ name: "search", description: "اسم الأغنية أو الفنان", type: "string", required: true }],
+  options: [{ name: "search", description: "رابط مسار Jamendo أو اسم الأغنية", type: "string", required: true }],
   async run(ctx) {
     const voiceChannel = ctx.member.voice.channel;
     if (!voiceChannel || voiceChannel.type !== ChannelType.GuildVoice) {
@@ -19,8 +19,13 @@ const command: BotCommand = {
       await ctx.reply("أحتاج صلاحيتَي الاتصال والتحدث في القناة الصوتية.");
       return;
     }
-    const query = ctx.getString("search")?.trim();
-    if (!query) { await ctx.reply("اكتب اسم المسار أو الفنان للبحث."); return; }
+    // Prefix commands supply positional args; Slash supplies a named option.
+    // Read the raw string option as a compatibility fallback for stale command registrations.
+    const rawOption = ctx.interaction?.options.data.find((option) =>
+      option.type === 3 && typeof option.value === "string"
+    );
+    const query = (ctx.getString("search") || ctx.args.join(" ") || (rawOption?.value as string | undefined))?.trim();
+    if (!query) { await ctx.reply("ضع رابط Jamendo أو اسم الأغنية في خانة البحث لأمر /play."); return; }
     try {
       const isUrl = /^https?:\/\//i.test(query);
       const track = isUrl
