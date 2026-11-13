@@ -111,6 +111,7 @@ export async function getHealthData(guildId: string, deps: HealthDeps): Promise<
         { name: "إرسال الرسائل", bit: 1n << 11n, when: true },
         { name: "قراءة سجل الرسائل", bit: 1n << 16n, when: true },
         { name: "إضافة روابط مضمنة", bit: 1n << 14n, when: true },
+        { name: "إضافة تفاعلات", bit: 1n << 6n, when: !!config.counting?.enabled },
         { name: "إدارة القنوات", bit: 1n << 4n, when: !!config.tickets?.enabled || !!config.tempVoice?.enabled },
         { name: "إدارة الرتب", bit: 1n << 28n, when: !!config.captcha?.enabled || !!config.jail?.enabled || !!config.autoRole?.enabled || (config.antiNuke?.enabled && config.antiNuke.punishment === "stripRoles") },
         { name: "مهلة الأعضاء", bit: 1n << 40n, when: !!config.automod?.enabled },
