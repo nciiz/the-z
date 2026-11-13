@@ -20,7 +20,8 @@
     "dotenv": "^16.4.5",
     "gif-encoder-2": "^1.0.5",
     "https-proxy-agent": "^9.1.0",
-    "islam.js": "^1.3.0"
+    "islam.js": "^1.3.0",
+    "opusscript": "^0.0.8"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",

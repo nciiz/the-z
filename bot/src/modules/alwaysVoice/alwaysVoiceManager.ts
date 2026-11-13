@@ -3,6 +3,7 @@ import { joinVoiceChannel, getVoiceConnection } from "@discordjs/voice";
 import { ExtendedClient } from "../../client";
 import { getGuildConfig } from "../../utils/guildConfig";
 import { logError, logInfo } from "../../utils/logger";
+import { isMusicActive } from "../music/musicManager";
 
 /**
  * ميزة "البوت المقيم": البوت يبقى في روم صوتي محدد يُضبط من الداشبورد
@@ -15,6 +16,7 @@ const scheduled = new Set<string>();
 
 async function reconcileGuild(client: ExtendedClient, guildId: string): Promise<void> {
   try {
+    if (isMusicActive(guildId)) return;
     const gConfig = await getGuildConfig(client, guildId);
     const cfg = gConfig?.alwaysVoice;
     if (!cfg?.enabled || !cfg.channelId) return;
