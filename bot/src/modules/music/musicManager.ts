@@ -71,7 +71,7 @@ export function initializeLavalink(client: ExtendedClient): void {
 }
 
 function formatDuration(milliseconds?: number | null): string {
-  if (!Number.isFinite(milliseconds) || milliseconds <= 0) return "بث مباشر";
+  if (typeof milliseconds !== "number" || !Number.isFinite(milliseconds) || milliseconds <= 0) return "بث مباشر";
   const totalSeconds = Math.floor(milliseconds / 1000);
   return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, "0")}`;
 }
