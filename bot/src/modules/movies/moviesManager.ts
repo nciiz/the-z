@@ -145,10 +145,11 @@ export async function handleMovieSearch(channel: any, query: string, authorId: s
   if (row.components.length > 0) components.push(row);
 
   // إذا كان هناك أكثر من نتيجة، أضف قائمة اختيار مؤقتة.
+  let timeoutSeconds = 300;
   if (results.length > 1) {
-    const timeoutSeconds = client && channel.guildId
-      ? (await getGuildConfig(client, channel.guildId)).movies?.selectionTimeoutSeconds ?? 300
-      : 300;
+    if (client && channel.guildId) {
+      timeoutSeconds = (await getGuildConfig(client, channel.guildId)).movies?.selectionTimeoutSeconds ?? 300;
+    }
     const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId(`movies:select:${authorId}`)
