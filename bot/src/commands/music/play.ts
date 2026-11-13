@@ -1,6 +1,6 @@
 import { ChannelType, PermissionFlagsBits } from "discord.js";
 import { BotCommand } from "../../types/command";
-import { enqueueTrack, findJamendoMatch, getSpotifyTrackMetadata, getTrackFromLink, MusicTrack, searchTracks } from "../../modules/music/musicManager";
+import { enqueueTrack, findJamendoMatches, getSpotifyTrackTitle, getTrackFromLink, MusicTrack, searchTracks } from "../../modules/music/musicManager";
 
 const command: BotCommand = {
   name: "play",
@@ -33,12 +33,17 @@ const command: BotCommand = {
       if (!isUrl) {
         track = (await searchTracks(query))[0] ?? null;
       } else if (/^https:\/\/(?:open\.spotify\.com|www\.spotify\.com)\//i.test(query)) {
-        const spotifyTrack = await getSpotifyTrackMetadata(query);
-        if (!spotifyTrack) { await ctx.reply("ما قدرت أقرأ بيانات الأغنية من رابط Spotify."); return; }
-        spotifySourceTitle = `${spotifyTrack.name} — ${spotifyTrack.artists.map((artist) => artist.name).join(", ")}`;
-        track = await findJamendoMatch(spotifyTrack);
+        spotifySourceTitle = await getSpotifyTrackTitle(query) ?? undefined;
+        if (!spotifySourceTitle) { await ctx.reply("ما قدرت أقرأ عنوان الأغنية من رابط Spotify."); return; }
+        const matches = await findJamendoMatches(spotifySourceTitle);
+        if (matches.length > 1) {
+          const choices = matches.map((match, index) => `${index + 1}. [${match.name} — ${match.artist_name}](${match.shareurl})`).join("\n");
+          await ctx.reply(`عنوان Spotify هو **${spotifySourceTitle}**. وجدت عدة نسخ على Jamendo؛ اختر النسخة المطلوبة ثم استخدم رابط Jamendo لها مع /play:\n${choices}`);
+          return;
+        }
+        track = matches[0] ?? null;
         if (!track) {
-          await ctx.reply(`قرأت الرابط: **${spotifySourceTitle}**، لكن ما لقيت نفس الأغنية والفنان في مكتبة Jamendo المتاحة للتشغيل.`);
+          await ctx.reply(`قرأت عنوان Spotify: **${spotifySourceTitle}**، لكن ما لقيت مسارًا مطابقًا في مكتبة Jamendo المتاحة للتشغيل.`);
           return;
         }
       } else {
@@ -51,10 +56,8 @@ const command: BotCommand = {
     } catch (error: any) {
       if (error?.message === "MISSING_JAMENDO_CLIENT_ID") {
         await ctx.reply("ميزة الموسيقى تحتاج إعداد `JAMENDO_CLIENT_ID` في متغيرات بيئة الاستضافة.");
-      } else if (error?.message === "MISSING_SPOTIFY_API_CREDENTIALS") {
-        await ctx.reply("تشغيل رابط Spotify يحتاج `SPOTIFY_CLIENT_ID` و`SPOTIFY_CLIENT_SECRET` لقراءة اسم الأغنية والفنان، بالإضافة إلى `JAMENDO_CLIENT_ID` لمصدر الصوت.");
       } else if (error?.message === "UNSUPPORTED_AUDIO_LINK") {
-        await ctx.reply("حاليًا أقبل رابط Spotify للتعرّف على الأغنية، أو رابط مسار Jamendo للتشغيل المباشر. لا أستخرج الصوت من روابط YouTube.");
+        await ctx.reply("حاليًا أقبل رابط أغنية Spotify للتعرّف على عنوانها، أو رابط مسار Jamendo للتشغيل المباشر. لا أستخرج الصوت من روابط YouTube.");
       } else if (error?.message === "UNSUPPORTED_SPOTIFY_LINK") {
         await ctx.reply("أرسل رابط أغنية Spotify مفردة، وليس رابط ألبوم أو قائمة تشغيل.");
       } else {

@@ -14,13 +14,6 @@ export interface MusicTrack {
   license_ccurl?: string;
 }
 
-interface SpotifyTrackMetadata {
-  id: string;
-  name: string;
-  artists: { name: string }[];
-  external_urls?: { spotify?: string };
-}
-
 interface QueueItem { track: MusicTrack; textChannelId: string; requestedBy: string; }
 interface GuildPlayer { player: AudioPlayer; queue: QueueItem[]; connection: VoiceConnection; stream?: Readable; controller?: AbortController; starting: boolean; current?: QueueItem; }
 const sessions = new Map<string, GuildPlayer>();
@@ -61,31 +54,7 @@ export async function getTrackFromLink(link: string): Promise<MusicTrack | null>
   return tracks[0] ?? null;
 }
 
-let spotifyToken: { value: string; expiresAt: number } | undefined;
-
-async function getSpotifyAccessToken(): Promise<string> {
-  const clientId = process.env.SPOTIFY_CLIENT_ID?.trim();
-  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET?.trim();
-  if (!clientId || !clientSecret) throw new Error("MISSING_SPOTIFY_API_CREDENTIALS");
-  if (spotifyToken && spotifyToken.expiresAt > Date.now() + 30_000) return spotifyToken.value;
-
-  const response = await fetch("https://accounts.spotify.com/api/token", {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: new URLSearchParams({ grant_type: "client_credentials" }),
-    signal: AbortSignal.timeout(12_000)
-  });
-  if (!response.ok) throw new Error(`SPOTIFY_AUTH_HTTP_${response.status}`);
-  const payload = await response.json() as { access_token?: string; expires_in?: number };
-  if (!payload.access_token) throw new Error("SPOTIFY_AUTH_FAILED");
-  spotifyToken = { value: payload.access_token, expiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000 };
-  return spotifyToken.value;
-}
-
-export async function getSpotifyTrackMetadata(link: string): Promise<SpotifyTrackMetadata | null> {
+export async function getSpotifyTrackTitle(link: string): Promise<string | null> {
   let parsed: URL;
   try { parsed = new URL(link); } catch { return null; }
   const host = parsed.hostname.toLowerCase();
@@ -95,29 +64,23 @@ export async function getSpotifyTrackMetadata(link: string): Promise<SpotifyTrac
   const match = parsed.pathname.match(/^\/(?:intl-[a-z]{2}\/)?track\/([A-Za-z0-9]+)\/?$/i);
   if (!match) throw new Error("UNSUPPORTED_SPOTIFY_LINK");
 
-  const response = await fetch(`https://api.spotify.com/v1/tracks/${match[1]}?market=JO`, {
-    headers: { Authorization: `Bearer ${await getSpotifyAccessToken()}` },
+  const canonicalUrl = `https://open.spotify.com/track/${match[1]}`;
+  const response = await fetch(`https://open.spotify.com/oembed?${new URLSearchParams({ url: canonicalUrl })}`, {
     signal: AbortSignal.timeout(12_000)
   });
   if (!response.ok) throw new Error(`SPOTIFY_TRACK_HTTP_${response.status}`);
-  const track = await response.json() as SpotifyTrackMetadata;
-  return track.name && track.artists?.length ? track : null;
+  const metadata = await response.json() as { title?: string; provider_name?: string };
+  return metadata.provider_name === "Spotify" ? metadata.title?.trim() || null : null;
 }
 
 function normalizeMusicName(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]+/g, "").trim();
 }
 
-export async function findJamendoMatch(track: SpotifyTrackMetadata): Promise<MusicTrack | null> {
-  const artists = track.artists.map((artist) => artist.name);
-  const results = await searchTracks(`${track.name} ${artists.join(" ")}`);
-  const expectedName = normalizeMusicName(track.name);
-  const expectedArtists = artists.map(normalizeMusicName);
-  return results.find((candidate) => {
-    const sameName = normalizeMusicName(candidate.name) === expectedName;
-    const candidateArtist = normalizeMusicName(candidate.artist_name);
-    return sameName && expectedArtists.some((artist) => artist === candidateArtist);
-  }) ?? null;
+export async function findJamendoMatches(title: string): Promise<MusicTrack[]> {
+  const results = await searchTracks(title);
+  const expectedName = normalizeMusicName(title);
+  return results.filter((candidate) => normalizeMusicName(candidate.name) === expectedName).slice(0, 5);
 }
 
 function formatDuration(seconds: number): string {
