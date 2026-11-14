@@ -50,7 +50,7 @@ const command: BotCommand = {
       } else if (error?.message === "TRACK_NOT_FOUND") {
         await ctx.reply("ما لقيت نتيجة قابلة للتشغيل. جرّب عنوانًا أوضح أو رابط YouTube مباشرًا.");
       } else if (error?.message === "NO_PLAYABLE_SEARCH_RESULT") {
-        await ctx.reply("نتائج البحث المتاحة بث مباشر أو بدون مدة. جرّب كتابة اسم الفنان مع الأغنية أو أرسل رابط YouTube مباشرًا.");
+        await ctx.reply("ما لقيت نسخة صوتية قابلة للتشغيل في SoundCloud أو YouTube. جرّب اسم الفنان مع الأغنية أو رابط YouTube مباشرًا.");
       } else {
         console.error("[music/play] search or playback failed:", error);
         await ctx.reply("تعذر البحث أو بدء التشغيل حاليًا. جرّب مرة ثانية بعد قليل.");

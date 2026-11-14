@@ -369,10 +369,12 @@ export async function enqueueMusic(
   input: string
 ): Promise<{ title: string; position: number; playlistSize: number }> {
   let query = input.trim().replace(/^<|>$/g, "");
+  let fallbackQuery: string | undefined;
   if (/^https?:\/\//i.test(query)) {
     if (/^https:\/\/(?:open\.spotify\.com|www\.spotify\.com)\//i.test(query)) {
       const title = await spotifyTrackTitle(query);
-      query = `ytsearch:${title}`;
+      query = `scsearch:${title}`;
+      fallbackQuery = `ytsearch:${title}`;
     } else if (!isYouTubeUrl(query)) {
       throw new Error("UNSUPPORTED_MUSIC_LINK");
     }
@@ -380,16 +382,28 @@ export async function enqueueMusic(
     query = `ytsearch:${query}`;
   }
 
-  const isSearch = query.startsWith("ytsearch:");
+  let searchQuery = query;
+  let isSearch = /^(?:yt|sc)search:/i.test(searchQuery);
   const player = await getOrCreatePlayer(client, guild, voiceChannelId, textChannelId);
-  const result = await player.search({ query }, requester);
-  const tracks = result.tracks ?? [];
-  if (!tracks.length) throw new Error("TRACK_NOT_FOUND");
+  let result = await player.search({ query: searchQuery }, requester).catch(async (error) => {
+    if (!fallbackQuery) throw error;
+    searchQuery = fallbackQuery;
+    isSearch = true;
+    return player.search({ query: searchQuery }, requester);
+  });
+  let tracks = result.tracks ?? [];
   // Search results sometimes start with a live/zero-duration result that loads
   // metadata but never yields audio. Prefer a regular recording for name searches.
-  const selectedTrack = isSearch
+  let selectedTrack = isSearch
     ? tracks.find((track) => !track.info.isStream && (track.info.duration ?? 0) > 0)
     : tracks[0];
+  if (!selectedTrack && fallbackQuery && searchQuery !== fallbackQuery) {
+    searchQuery = fallbackQuery;
+    isSearch = true;
+    result = await player.search({ query: searchQuery }, requester);
+    tracks = result.tracks ?? [];
+    selectedTrack = tracks.find((track) => !track.info.isStream && (track.info.duration ?? 0) > 0);
+  }
   if (!selectedTrack) throw new Error("NO_PLAYABLE_SEARCH_RESULT");
   // Playlist URLs are disabled; normal searches enqueue only their best playable match.
   const selectedTracks = [selectedTrack];

@@ -10,10 +10,12 @@ lavalink:
     password: ${LAVALINK_PASSWORD}
     sources:
       youtube: false
+      soundcloud: true
     bufferDurationMs: 400
     frameBufferDurationMs: 5000
     opusEncodingQuality: 5
     playerUpdateInterval: 5
+    soundcloudSearchEnabled: true
 
 plugins:
   youtube:
