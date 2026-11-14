@@ -1,11 +1,14 @@
 import { ChannelType, Client as DiscordClient, EmbedBuilder, GatewayIntentBits, Guild, PermissionFlagsBits, TextChannel } from "discord.js";
 import { LavalinkManager, Player } from "lavalink-client";
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
+import { promisify } from "node:util";
 import { decryptMusicBotToken, IMusicBotCredential, MusicBotCredential } from "@thez/shared";
 import { ExtendedClient } from "../../client";
 import { logInfo } from "../../utils/logger";
 
 const nodeReady = new WeakMap<ExtendedClient, boolean>();
+const execFileAsync = promisify(execFile);
 interface MusicBotRuntime {
   fingerprint: string;
   discord: DiscordClient;
@@ -293,7 +296,7 @@ export function isPrimaryMusicActive(guildId: string, client?: ExtendedClient): 
   return !!player && (player.playing || player.paused || player.queue.tracks.length > 0);
 }
 
-async function spotifyTrackTitle(link: string): Promise<string> {
+async function spotifyTrackTitle(link: string): Promise<{ title: string; author: string }> {
   const parsed = new URL(link);
   if (parsed.protocol !== "https:" || !["open.spotify.com", "www.spotify.com"].includes(parsed.hostname.toLowerCase())) {
     throw new Error("UNSUPPORTED_MUSIC_LINK");
@@ -308,9 +311,10 @@ async function spotifyTrackTitle(link: string): Promise<string> {
   const metadata = await response.json() as { provider_name?: string; title?: string; author_name?: string };
   if (metadata.provider_name !== "Spotify" || !metadata.title?.trim()) throw new Error("SPOTIFY_TITLE_UNAVAILABLE");
   const artist = metadata.author_name?.trim();
-  return artist && artist.toLowerCase() !== "spotify"
-    ? `${metadata.title.trim()} ${artist}`
-    : metadata.title.trim();
+  return {
+    title: metadata.title.trim(),
+    author: artist && artist.toLowerCase() !== "spotify" ? artist : ""
+  };
 }
 
 function isYouTubeUrl(value: string): boolean {
@@ -322,6 +326,73 @@ function isYouTubeUrl(value: string): boolean {
     );
   } catch {
     return false;
+  }
+}
+
+function isSoundCloudUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && ["soundcloud.com", "www.soundcloud.com", "m.soundcloud.com"].includes(url.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+interface ResolvedAudio {
+  streamUrl: string;
+  title?: string;
+  author?: string;
+  durationSeconds?: number;
+  webpageUrl?: string;
+  artworkUrl?: string;
+}
+
+/** Resolve the media URL with the yt-dlp binary already installed in the Docker image.
+ * Passing the resulting audio URL to Lavalink's HTTP source avoids relying on
+ * YouTube's frequently changing Lavalink extractor/plugin clients.
+ */
+async function resolveAudio(input: string, isSearch: boolean): Promise<ResolvedAudio> {
+  const identifier = isSearch ? `ytsearch1:${input}` : input;
+  try {
+    const { stdout } = await execFileAsync("yt-dlp", [
+      "--no-warnings",
+      "--no-playlist",
+      "--no-call-home",
+      "--socket-timeout", "20",
+      "--retries", "2",
+      "--extractor-retries", "2",
+      "--format", "bestaudio/best",
+      "--dump-json",
+      "--get-url",
+      identifier
+    ], { timeout: 60_000, maxBuffer: 8 * 1024 * 1024, windowsHide: true });
+
+    let metadata: Record<string, unknown> | undefined;
+    let streamUrl: string | undefined;
+    for (const line of stdout.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      if (trimmed.startsWith("{")) {
+        try { metadata = JSON.parse(trimmed) as Record<string, unknown>; } catch { /* ignore non-JSON output */ }
+      } else if (/^https?:\/\//i.test(trimmed)) {
+        streamUrl = trimmed;
+      }
+    }
+    if (!streamUrl) throw new Error("NO_AUDIO_URL");
+    return {
+      streamUrl,
+      title: typeof metadata?.title === "string" ? metadata.title : undefined,
+      author: typeof metadata?.artist === "string"
+        ? metadata.artist
+        : typeof metadata?.uploader === "string" ? metadata.uploader : undefined,
+      durationSeconds: typeof metadata?.duration === "number" ? metadata.duration : undefined,
+      webpageUrl: typeof metadata?.webpage_url === "string" ? metadata.webpage_url : undefined,
+      artworkUrl: typeof metadata?.thumbnail === "string" ? metadata.thumbnail : undefined
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[music/resolve] Audio source resolution failed: ${message.slice(0, 240)}`);
+    throw new Error("AUDIO_SOURCE_UNAVAILABLE");
   }
 }
 
@@ -368,44 +439,40 @@ export async function enqueueMusic(
   requester: unknown,
   input: string
 ): Promise<{ title: string; position: number; playlistSize: number }> {
-  let query = input.trim().replace(/^<|>$/g, "");
-  let fallbackQuery: string | undefined;
+  const query = input.trim().replace(/^<|>$/g, "");
+  let sourceInput = query;
+  let isSearch = false;
+  let displayTitle: string | undefined;
+  let displayAuthor: string | undefined;
+
   if (/^https?:\/\//i.test(query)) {
     if (/^https:\/\/(?:open\.spotify\.com|www\.spotify\.com)\//i.test(query)) {
-      const title = await spotifyTrackTitle(query);
-      query = `scsearch:${title}`;
-      fallbackQuery = `ytsearch:${title}`;
-    } else if (!isYouTubeUrl(query)) {
+      const spotify = await spotifyTrackTitle(query);
+      sourceInput = [spotify.title, spotify.author].filter(Boolean).join(" ");
+      displayTitle = spotify.title;
+      displayAuthor = spotify.author;
+      isSearch = true;
+    } else if (!isYouTubeUrl(query) && !isSoundCloudUrl(query)) {
       throw new Error("UNSUPPORTED_MUSIC_LINK");
     }
   } else {
-    query = `ytsearch:${query}`;
+    isSearch = true;
   }
 
-  let searchQuery = query;
-  let isSearch = /^(?:yt|sc)search:/i.test(searchQuery);
+  const resolved = await resolveAudio(sourceInput, isSearch);
+  displayTitle ??= resolved.title;
+  displayAuthor ??= resolved.author;
   const player = await getOrCreatePlayer(client, guild, voiceChannelId, textChannelId);
-  let result = await player.search({ query: searchQuery }, requester).catch(async (error) => {
-    if (!fallbackQuery) throw error;
-    searchQuery = fallbackQuery;
-    isSearch = true;
-    return player.search({ query: searchQuery }, requester);
-  });
-  let tracks = result.tracks ?? [];
-  // Search results sometimes start with a live/zero-duration result that loads
-  // metadata but never yields audio. Prefer a regular recording for name searches.
-  let selectedTrack = isSearch
-    ? tracks.find((track) => !track.info.isStream && (track.info.duration ?? 0) > 0)
-    : tracks[0];
-  if (!selectedTrack && fallbackQuery && searchQuery !== fallbackQuery) {
-    searchQuery = fallbackQuery;
-    isSearch = true;
-    result = await player.search({ query: searchQuery }, requester);
-    tracks = result.tracks ?? [];
-    selectedTrack = tracks.find((track) => !track.info.isStream && (track.info.duration ?? 0) > 0);
-  }
+  const result = await player.search({ query: resolved.streamUrl }, requester);
+  const selectedTrack = result.tracks?.[0];
   if (!selectedTrack) throw new Error("NO_PLAYABLE_SEARCH_RESULT");
-  // Playlist URLs are disabled; normal searches enqueue only their best playable match.
+  Object.assign(selectedTrack.info, {
+    title: displayTitle || selectedTrack.info.title,
+    author: displayAuthor || selectedTrack.info.author,
+    uri: resolved.webpageUrl || (isYouTubeUrl(query) || isSoundCloudUrl(query) ? query : selectedTrack.info.uri),
+    duration: resolved.durationSeconds ? resolved.durationSeconds * 1000 : selectedTrack.info.duration,
+    artworkUrl: resolved.artworkUrl || selectedTrack.info.artworkUrl
+  });
   const selectedTracks = [selectedTrack];
   const playlistSize = selectedTracks.length;
   const position = await player.queue.add(selectedTracks);

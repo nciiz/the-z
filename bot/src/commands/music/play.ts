@@ -32,7 +32,7 @@ const command: BotCommand = {
       if (error?.message === "LAVALINK_NOT_READY") {
         await ctx.reply("خدمة الموسيقى غير جاهزة الآن. حاول بعد لحظات.");
       } else if (error?.message === "UNSUPPORTED_MUSIC_LINK") {
-        await ctx.reply("الرابط غير مدعوم. أرسل رابط YouTube أو Spotify أو اكتب اسم الأغنية.");
+        await ctx.reply("الرابط غير مدعوم. أرسل رابط YouTube أو SoundCloud أو Spotify أو اكتب اسم الأغنية.");
       } else if (error?.message === "SPOTIFY_TRACK_URL_REQUIRED") {
         await ctx.reply("أرسل رابط أغنية Spotify مفردة؛ روابط الألبومات وقوائم التشغيل غير مدعومة.");
       } else if (error?.message === "BOT_IN_ANOTHER_VOICE_CHANNEL") {
@@ -50,7 +50,9 @@ const command: BotCommand = {
       } else if (error?.message === "TRACK_NOT_FOUND") {
         await ctx.reply("ما لقيت نتيجة قابلة للتشغيل. جرّب عنوانًا أوضح أو رابط YouTube مباشرًا.");
       } else if (error?.message === "NO_PLAYABLE_SEARCH_RESULT") {
-        await ctx.reply("ما لقيت نسخة صوتية قابلة للتشغيل في SoundCloud أو YouTube. جرّب اسم الفنان مع الأغنية أو رابط YouTube مباشرًا.");
+        await ctx.reply("ما لقيت نتيجة صوتية قابلة للتشغيل. جرّب اسم الفنان مع الأغنية أو رابطًا مباشرًا من YouTube.");
+      } else if (error?.message === "AUDIO_SOURCE_UNAVAILABLE") {
+        await ctx.reply("تعذر استخراج مصدر صوت صالح من الرابط أو نتيجة البحث. جرّب رابطًا مباشرًا آخر أو اكتب اسم الأغنية والفنان.");
       } else {
         console.error("[music/play] search or playback failed:", error);
         await ctx.reply("تعذر البحث أو بدء التشغيل حاليًا. جرّب مرة ثانية بعد قليل.");
