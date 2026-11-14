@@ -115,8 +115,7 @@ function attachTrackAnnouncements(discord: DiscordClient, manager: LavalinkManag
     console.error(`[music/lavalink] trackError guild=${player.guildId} title=${title}:`, {
       severity: exception?.severity,
       message: exception?.message,
-      cause: exception?.cause,
-      stackTrace: exception?.stackTrace
+      cause: exception?.cause
     });
     const channel = getTextChannel(player);
     await channel?.send(`تعذر تشغيل **${title.slice(0, 180)}**: ${String(message).slice(0, 240)}`).catch(() => undefined);
