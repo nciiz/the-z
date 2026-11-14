@@ -23,12 +23,16 @@ plugins:
     allowSearch: true
     allowDirectVideoIds: true
     allowDirectPlaylistIds: false
-    # Prefer a client with audio playback support; retain web clients as fallbacks.
+    # MUSIC is search-only, so keep playback-capable clients first. YouTube
+    # availability varies by client and region, so keep several playback
+    # clients enabled and prioritize ones that return audio formats.
     clients:
+      - ANDROID_MUSIC
+      - MWEB
+      - TVHTML5_SIMPLY
       - ANDROID_VR
-      - WEB
       - WEBEMBEDDED
-      - MUSIC
+      - WEB
 
 logging:
   level:
