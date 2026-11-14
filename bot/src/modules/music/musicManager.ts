@@ -1,14 +1,13 @@
 import { ChannelType, Client as DiscordClient, EmbedBuilder, GatewayIntentBits, Guild, PermissionFlagsBits, TextChannel } from "discord.js";
 import { LavalinkManager, Player } from "lavalink-client";
-import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { promisify } from "node:util";
 import { decryptMusicBotToken, IMusicBotCredential, MusicBotCredential } from "@thez/shared";
 import { ExtendedClient } from "../../client";
 import { logInfo } from "../../utils/logger";
+import { prepareAudio, releaseAudioToken, shutdownAudioCache } from "./audioCache";
+import { isSpotifyUrl, resolveSpotify, SpotifyCollection } from "./spotify";
 
 const nodeReady = new WeakMap<ExtendedClient, boolean>();
-const execFileAsync = promisify(execFile);
 interface MusicBotRuntime {
   fingerprint: string;
   discord: DiscordClient;
@@ -87,6 +86,13 @@ function createNodeManager(
   return manager;
 }
 
+function trackAudioToken(track: { userData?: unknown } | null | undefined): string | undefined {
+  const data = track?.userData;
+  if (!data || typeof data !== "object") return undefined;
+  const token = (data as Record<string, unknown>).audioToken;
+  return typeof token === "string" ? token : undefined;
+}
+
 function attachTrackAnnouncements(discord: DiscordClient, manager: LavalinkManager): void {
   const getTextChannel = (player: Player): TextChannel | undefined => {
     if (!player.textChannelId) return undefined;
@@ -126,6 +132,16 @@ function attachTrackAnnouncements(discord: DiscordClient, manager: LavalinkManag
     console.warn(`[music/lavalink] trackStuck guild=${player.guildId} title=${title} thresholdMs=${payload?.thresholdMs}`);
     const channel = getTextChannel(player);
     await channel?.send(`توقف مصدر الصوت للمقطع **${title.slice(0, 180)}** ولم يصل صوت خلال ${payload?.thresholdMs ?? "المدة المحددة"}ms.`).catch(() => undefined);
+  });
+
+  // Delete the temporary audio file as soon as Lavalink is done with it.
+  // Tokens are idempotent, so cleaning on playerDestroy as well is safe.
+  manager.on("trackEnd", (_player, track) => {
+    releaseAudioToken(trackAudioToken(track));
+  });
+  manager.on("playerDestroy", (player) => {
+    releaseAudioToken(trackAudioToken(player.queue.current));
+    for (const track of player.queue.tracks) releaseAudioToken(trackAudioToken(track));
   });
 
   manager.on("playerSocketClosed", (player, payload) => {
@@ -325,27 +341,6 @@ export function isPrimaryMusicActive(guildId: string, client?: ExtendedClient): 
   return !!player && (player.playing || player.paused || player.queue.tracks.length > 0);
 }
 
-async function spotifyTrackTitle(link: string): Promise<{ title: string; author: string }> {
-  const parsed = new URL(link);
-  if (parsed.protocol !== "https:" || !["open.spotify.com", "www.spotify.com"].includes(parsed.hostname.toLowerCase())) {
-    throw new Error("UNSUPPORTED_MUSIC_LINK");
-  }
-  const trackMatch = parsed.pathname.match(/^\/(?:intl-[a-z]{2}\/)?track\/([A-Za-z0-9]+)\/?$/i);
-  if (!trackMatch) throw new Error("SPOTIFY_TRACK_URL_REQUIRED");
-  const canonicalUrl = `https://open.spotify.com/track/${trackMatch[1]}`;
-  const response = await fetch(`https://open.spotify.com/oembed?${new URLSearchParams({ url: canonicalUrl })}`, {
-    signal: AbortSignal.timeout(12_000)
-  });
-  if (!response.ok) throw new Error(`SPOTIFY_OEMBED_HTTP_${response.status}`);
-  const metadata = await response.json() as { provider_name?: string; title?: string; author_name?: string };
-  if (metadata.provider_name !== "Spotify" || !metadata.title?.trim()) throw new Error("SPOTIFY_TITLE_UNAVAILABLE");
-  const artist = metadata.author_name?.trim();
-  return {
-    title: metadata.title.trim(),
-    author: artist && artist.toLowerCase() !== "spotify" ? artist : ""
-  };
-}
-
 function isYouTubeUrl(value: string): boolean {
   try {
     const url = new URL(value);
@@ -369,6 +364,7 @@ function isSoundCloudUrl(value: string): boolean {
 
 interface ResolvedAudio {
   streamUrl: string;
+  audioToken: string;
   title?: string;
   author?: string;
   durationSeconds?: number;
@@ -376,57 +372,113 @@ interface ResolvedAudio {
   artworkUrl?: string;
 }
 
-/** Resolve the media URL with the yt-dlp binary already installed in the Docker image.
- * Passing the resulting audio URL to Lavalink's HTTP source avoids relying on
- * YouTube's frequently changing Lavalink extractor/plugin clients.
+interface DisplayMetadata {
+  title?: string;
+  author?: string;
+  uri?: string;
+  durationMs?: number;
+  artworkUrl?: string;
+}
+
+/**
+ * Downloads the audio with yt-dlp and returns a loopback HTTP URL. YouTube's
+ * direct googlevideo URLs return 403 to Lavalink because they are tied to the
+ * extractor's request headers, so handing them to Lavalink directly does not
+ * work. The local cache server forwards the exact bytes with Range support.
  */
 async function resolveAudio(input: string, isSearch: boolean): Promise<ResolvedAudio> {
   const identifier = isSearch ? `ytsearch1:${input}` : input;
-  try {
-    const { stdout } = await execFileAsync("yt-dlp", [
-      "--no-warnings",
-      "--no-playlist",
-      "--socket-timeout", "20",
-      "--retries", "2",
-      "--extractor-retries", "2",
-      "--js-runtimes", "node",
-      "--format", "bestaudio/best",
-      "--dump-json",
-      "--get-url",
-      identifier
-    ], { timeout: 60_000, maxBuffer: 8 * 1024 * 1024, windowsHide: true });
+  const audio = await prepareAudio(identifier);
+  return {
+    streamUrl: audio.url,
+    audioToken: audio.token,
+    title: audio.title,
+    author: audio.author,
+    durationSeconds: audio.durationSeconds,
+    webpageUrl: audio.webpageUrl,
+    artworkUrl: audio.artworkUrl
+  };
+}
 
-    let metadata: Record<string, unknown> | undefined;
-    let streamUrl: string | undefined;
-    for (const line of stdout.split(/\r?\n/)) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      if (trimmed.startsWith("{")) {
-        try { metadata = JSON.parse(trimmed) as Record<string, unknown>; } catch { /* ignore non-JSON output */ }
-      } else if (/^https?:\/\//i.test(trimmed)) {
-        streamUrl = trimmed;
-      }
-    }
-    if (!streamUrl) throw new Error("NO_AUDIO_URL");
-    return {
-      streamUrl,
-      title: typeof metadata?.title === "string" ? metadata.title : undefined,
-      author: typeof metadata?.artist === "string"
-        ? metadata.artist
-        : typeof metadata?.uploader === "string" ? metadata.uploader : undefined,
-      durationSeconds: typeof metadata?.duration === "number" ? metadata.duration : undefined,
-      webpageUrl: typeof metadata?.webpage_url === "string" ? metadata.webpage_url : undefined,
-      artworkUrl: typeof metadata?.thumbnail === "string" ? metadata.thumbnail : undefined
-    };
+async function enqueueResolvedTrack(
+  player: Player,
+  resolved: ResolvedAudio,
+  requester: unknown,
+  display: DisplayMetadata
+): Promise<{ title: string; position: number }> {
+  let result;
+  try {
+    result = await player.search({ query: resolved.streamUrl, source: "http" }, requester);
   } catch (error) {
-    const processError = error as Error & { stderr?: string; code?: number | string };
-    console.warn("[music/resolve] Audio source resolution failed:", {
-      code: processError.code,
-      message: processError.message?.slice(0, 500),
-      stderr: processError.stderr?.trim().slice(-2_000)
-    });
-    throw new Error("AUDIO_SOURCE_UNAVAILABLE");
+    releaseAudioToken(resolved.audioToken);
+    throw error;
   }
+
+  const selectedTrack = result.tracks?.[0];
+  if (!selectedTrack) {
+    releaseAudioToken(resolved.audioToken);
+    throw new Error("NO_PLAYABLE_SEARCH_RESULT");
+  }
+
+  Object.assign(selectedTrack.info, {
+    title: display.title || resolved.title || selectedTrack.info.title,
+    author: display.author || resolved.author || selectedTrack.info.author,
+    uri: display.uri || resolved.webpageUrl || selectedTrack.info.uri,
+    duration: display.durationMs ?? (resolved.durationSeconds ? resolved.durationSeconds * 1000 : selectedTrack.info.duration),
+    artworkUrl: display.artworkUrl || resolved.artworkUrl || selectedTrack.info.artworkUrl
+  });
+
+  const previousUserData = selectedTrack.userData && typeof selectedTrack.userData === "object"
+    ? selectedTrack.userData
+    : {};
+  selectedTrack.userData = { ...previousUserData, audioToken: resolved.audioToken };
+
+  try {
+    const position = await player.queue.add([selectedTrack]);
+    return { title: selectedTrack.info.title, position };
+  } catch (error) {
+    releaseAudioToken(resolved.audioToken);
+    throw error;
+  }
+}
+
+function spotifySearchInput(track: { title: string; artists: string }): string {
+  const artists = track.artists.toLowerCase() === "spotify" ? "" : track.artists;
+  return [track.title, artists].filter(Boolean).join(" ");
+}
+
+async function enqueueSpotifyCollection(
+  player: Player,
+  collection: SpotifyCollection,
+  requester: unknown
+): Promise<{ title: string; position: number; playlistSize: number }> {
+  let firstPosition = 0;
+  let addedCount = 0;
+
+  for (const track of collection.tracks) {
+    const searchInput = spotifySearchInput(track);
+    try {
+      const resolved = await resolveAudio(searchInput, true);
+      const queued = await enqueueResolvedTrack(player, resolved, requester, {
+        title: track.title,
+        author: track.artists,
+        uri: track.url || collection.url,
+        durationMs: track.durationMs,
+        artworkUrl: track.artworkUrl
+      });
+      if (!firstPosition) firstPosition = queued.position;
+      addedCount++;
+      if (!player.playing) await player.play();
+    } catch (error) {
+      console.warn(
+        `[music/spotify] Skipping "${track.title}" from ${collection.kind}:`,
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  }
+
+  if (!addedCount) throw new Error("NO_PLAYABLE_SEARCH_RESULT");
+  return { title: collection.title, position: firstPosition, playlistSize: addedCount };
 }
 
 async function getOrCreatePlayer(client: ExtendedClient, guild: Guild, voiceChannelId: string, textChannelId: string): Promise<Player> {
@@ -475,16 +527,24 @@ export async function enqueueMusic(
   const query = input.trim().replace(/^<|>$/g, "");
   let sourceInput = query;
   let isSearch = false;
-  let displayTitle: string | undefined;
-  let displayAuthor: string | undefined;
+  let display: DisplayMetadata = {};
+  let spotifyCollection: SpotifyCollection | undefined;
 
   if (/^https?:\/\//i.test(query)) {
-    if (/^https:\/\/(?:open\.spotify\.com|www\.spotify\.com)\//i.test(query)) {
-      const spotify = await spotifyTrackTitle(query);
-      sourceInput = [spotify.title, spotify.author].filter(Boolean).join(" ");
-      displayTitle = spotify.title;
-      displayAuthor = spotify.author;
-      isSearch = true;
+    if (isSpotifyUrl(query)) {
+      spotifyCollection = await resolveSpotify(query);
+      if (spotifyCollection.kind === "track") {
+        const track = spotifyCollection.tracks[0];
+        sourceInput = spotifySearchInput(track);
+        display = {
+          title: track.title,
+          author: track.artists,
+          uri: track.url || spotifyCollection.url,
+          durationMs: track.durationMs,
+          artworkUrl: track.artworkUrl
+        };
+        isSearch = true;
+      }
     } else if (!isYouTubeUrl(query) && !isSoundCloudUrl(query)) {
       throw new Error("UNSUPPORTED_MUSIC_LINK");
     }
@@ -492,27 +552,27 @@ export async function enqueueMusic(
     isSearch = true;
   }
 
-  // Join before resolving the media URL so a slow/failing source does not
-  // regress the old behavior where the music bot enters the requested voice channel.
+  // Join before preparing the audio so users see the bot enter the requested
+  // channel immediately, even when yt-dlp has to download a few megabytes.
   const player = await getOrCreatePlayer(client, guild, voiceChannelId, textChannelId);
-  const resolved = await resolveAudio(sourceInput, isSearch);
-  displayTitle ??= resolved.title;
-  displayAuthor ??= resolved.author;
-  const result = await player.search({ query: resolved.streamUrl }, requester);
-  const selectedTrack = result.tracks?.[0];
-  if (!selectedTrack) throw new Error("NO_PLAYABLE_SEARCH_RESULT");
-  Object.assign(selectedTrack.info, {
-    title: displayTitle || selectedTrack.info.title,
-    author: displayAuthor || selectedTrack.info.author,
-    uri: resolved.webpageUrl || (isYouTubeUrl(query) || isSoundCloudUrl(query) ? query : selectedTrack.info.uri),
-    duration: resolved.durationSeconds ? resolved.durationSeconds * 1000 : selectedTrack.info.duration,
-    artworkUrl: resolved.artworkUrl || selectedTrack.info.artworkUrl
-  });
-  const selectedTracks = [selectedTrack];
-  const playlistSize = selectedTracks.length;
-  const position = await player.queue.add(selectedTracks);
-  if (!player.playing) await player.play();
-  return { title: selectedTrack.info.title, position, playlistSize };
+  try {
+    if (spotifyCollection && spotifyCollection.kind !== "track") {
+      return await enqueueSpotifyCollection(player, spotifyCollection, requester);
+    }
+
+    const resolved = await resolveAudio(sourceInput, isSearch);
+    const queued = await enqueueResolvedTrack(player, resolved, requester, {
+      ...display,
+      uri: display.uri || (isYouTubeUrl(query) || isSoundCloudUrl(query) ? query : undefined)
+    });
+    if (!player.playing) await player.play();
+    return { title: queued.title, position: queued.position, playlistSize: 1 };
+  } catch (error) {
+    if (!player.playing && !player.queue.current && player.queue.tracks.length === 0) {
+      await player.destroy("music-request-failed", true).catch(() => undefined);
+    }
+    throw error;
+  }
 }
 
 export function getMusicPlayer(client: ExtendedClient, guildId: string): Player | undefined {
@@ -525,6 +585,7 @@ export function shutdownMusicBots(client: ExtendedClient): void {
   for (const runtime of registry.byFingerprint.values()) destroyMusicBotRuntime(runtime);
   registry.byFingerprint.clear();
   registry.byGuild.clear();
+  shutdownAudioCache();
 }
 
 export async function skipTrack(client: ExtendedClient, guildId: string): Promise<boolean> {

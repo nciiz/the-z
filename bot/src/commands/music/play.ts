@@ -4,7 +4,7 @@ import { enqueueMusic } from "../../modules/music/musicManager";
 
 const command: BotCommand = {
   name: "play",
-  description: "شغّل رابط YouTube أو Spotify أو ابحث عن أغنية",
+  description: "شغّل رابط YouTube أو Spotify (أغنية/ألبوم/قائمة) أو ابحث عن أغنية",
   category: "الموسيقى",
   guildOnly: true,
   options: [{ name: "search", description: "رابط YouTube أو Spotify أو اسم الأغنية", type: "string", required: true }],
@@ -26,15 +26,26 @@ const command: BotCommand = {
         id: ctx.user.id,
         username: ctx.user.username
       }, query);
-      if (queued.position > 1) await ctx.reply(`أُضيف **${queued.title}** إلى قائمة التشغيل في المركز ${queued.position}.`);
-      else await ctx.reply(`أُرسل **${queued.title}** إلى مشغل الموسيقى في <#${voiceChannel.id}>. سيظهر تأكيد التشغيل عند وصول الصوت.`);
+      if (queued.playlistSize > 1) {
+        await ctx.reply(`أُضيفت قائمة **${queued.title}** (${queued.playlistSize} مسارًا) إلى المشغل في <#${voiceChannel.id}>. سيبدأ التشغيل فور تجهيز أول مسار.`);
+      } else if (queued.position > 1) {
+        await ctx.reply(`أُضيف **${queued.title}** إلى قائمة التشغيل في المركز ${queued.position}.`);
+      } else {
+        await ctx.reply(`أُرسل **${queued.title}** إلى مشغل الموسيقى في <#${voiceChannel.id}>. سيظهر تأكيد التشغيل عند وصول الصوت.`);
+      }
     } catch (error: any) {
       if (error?.message === "LAVALINK_NOT_READY") {
         await ctx.reply("خدمة الموسيقى غير جاهزة الآن. حاول بعد لحظات.");
       } else if (error?.message === "UNSUPPORTED_MUSIC_LINK") {
         await ctx.reply("الرابط غير مدعوم. أرسل رابط YouTube أو SoundCloud أو Spotify أو اكتب اسم الأغنية.");
-      } else if (error?.message === "SPOTIFY_TRACK_URL_REQUIRED") {
-        await ctx.reply("أرسل رابط أغنية Spotify مفردة؛ روابط الألبومات وقوائم التشغيل غير مدعومة.");
+      } else if (error?.message === "SPOTIFY_RESOLVE_FAILED") {
+        await ctx.reply("تعذر قراءة رابط Spotify. تأكد أن الأغنية أو الألبوم أو القائمة **عامة**، أو أرسل رابط YouTube بدلًا منها.");
+      } else if (error?.message === "SPOTIFY_COLLECTION_UNSUPPORTED") {
+        await ctx.reply("روابط الفنانين أو حلقات البودكاست غير مدعومة. أرسل رابط أغنية أو ألبوم أو قائمة تشغيل من Spotify.");
+      } else if (error?.message === "SPOTIFY_LINK_RESOLVE_FAILED") {
+        await ctx.reply("تعذر فتح رابط Spotify المختصر. انسخ رابط الأغنية الكامل من Spotify ثم أعد المحاولة.");
+      } else if (typeof error?.message === "string" && error.message.startsWith("SPOTIFY_")) {
+        await ctx.reply("تعذر الوصول إلى Spotify الآن. قد يكون الرابط خاصًا أو محظورًا مؤقتًا؛ جرّب رابط YouTube بدلًا منه.");
       } else if (error?.message === "BOT_IN_ANOTHER_VOICE_CHANNEL") {
         await ctx.reply("البوت يشغّل الموسيقى حاليًا في قناة صوتية أخرى.");
       } else if (error?.message === "MUSIC_BOT_NOT_READY") {
@@ -51,8 +62,14 @@ const command: BotCommand = {
         await ctx.reply("ما لقيت نتيجة قابلة للتشغيل. جرّب عنوانًا أوضح أو رابط YouTube مباشرًا.");
       } else if (error?.message === "NO_PLAYABLE_SEARCH_RESULT") {
         await ctx.reply("ما لقيت نتيجة صوتية قابلة للتشغيل. جرّب اسم الفنان مع الأغنية أو رابطًا مباشرًا من YouTube.");
+      } else if (error?.message === "AUDIO_FILE_TOO_LARGE") {
+        await ctx.reply("الملف الصوتي أكبر من الحد المسموح. جرّب أغنية أقصر أو ارفع `MUSIC_MAX_FILE_SIZE_MB` في بيئة البوت.");
+      } else if (error?.message === "AUDIO_DOWNLOAD_TIMEOUT") {
+        await ctx.reply("استغرق تحميل الصوت وقتًا طويلًا. جرّب مرة أخرى أو ارفع `MUSIC_DOWNLOAD_TIMEOUT_SECONDS`.");
+      } else if (typeof error?.message === "string" && error.message.startsWith("AUDIO_SERVER_UNAVAILABLE")) {
+        await ctx.reply("تعذر تشغيل خادم الصوت المؤقت داخل البوت. راجع سجلات البوت ثم أعد التشغيل.");
       } else if (error?.message === "AUDIO_SOURCE_UNAVAILABLE") {
-        await ctx.reply("تعذر استخراج مصدر صوت صالح من الرابط أو نتيجة البحث. جرّب رابطًا مباشرًا آخر أو اكتب اسم الأغنية والفنان.");
+        await ctx.reply("تعذر تجهيز الصوت من الرابط أو نتيجة البحث. جرّب رابطًا مباشرًا آخر أو اكتب اسم الأغنية والفنان.");
       } else {
         console.error("[music/play] search or playback failed:", error);
         await ctx.reply("تعذر البحث أو بدء التشغيل حاليًا. جرّب مرة ثانية بعد قليل.");
