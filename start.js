@@ -130,7 +130,10 @@ function startLavalink() {
           return;
         }
       } catch {}
-      if (Date.now() - startedAt >= 90_000) {
+      // Lavalink 4.2.2 plus the YouTube plugin takes about 105s to initialize
+      // on Render's small instances. Do not start the bot while its node is
+      // still booting; that causes early player updates to time out.
+      if (Date.now() - startedAt >= 180_000) {
         console.log("[SYSTEM] ⚠️ Lavalink startup timed out; bot will start and music will retry the node.");
         resolve(false);
         return;
