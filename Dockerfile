@@ -1,7 +1,7 @@
-FROM node:20-alpine
+FROM node:22-alpine
 
 # ffmpeg و python لـ yt-dlp (تحميل تيك توك/انستا/تويتر)
-RUN apk add --no-cache ca-certificates ffmpeg python3 py3-pip openjdk21-jre-headless && pip3 install --no-cache-dir yt-dlp --break-system-packages
+RUN apk add --no-cache ca-certificates ffmpeg python3 py3-pip openjdk21-jre-headless && pip3 install --no-cache-dir 'yt-dlp[default]' --break-system-packages
 
 WORKDIR /app
 
