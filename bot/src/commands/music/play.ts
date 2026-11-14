@@ -1,4 +1,4 @@
-import { ChannelType, PermissionFlagsBits } from "discord.js";
+import { ChannelType } from "discord.js";
 import { BotCommand } from "../../types/command";
 import { enqueueMusic } from "../../modules/music/musicManager";
 
@@ -14,11 +14,6 @@ const command: BotCommand = {
       await ctx.reply("ادخل إلى قناة صوتية أولًا ثم استخدم الأمر.");
       return;
     }
-    const botMember = ctx.guild.members.me;
-    if (!botMember?.permissionsIn(voiceChannel).has([PermissionFlagsBits.Connect, PermissionFlagsBits.Speak])) {
-      await ctx.reply("أحتاج صلاحيتَي الاتصال والتحدث في القناة الصوتية.");
-      return;
-    }
     // Prefix commands supply positional args; Slash supplies a named option.
     // Read the raw string option as a compatibility fallback for stale command registrations.
     const rawOption = ctx.interaction?.options.data.find((option) =>
@@ -27,7 +22,10 @@ const command: BotCommand = {
     const query = (ctx.getString("search") || ctx.args.join(" ") || (rawOption?.value as string | undefined))?.trim();
     if (!query) { await ctx.reply("ضع رابط YouTube أو Spotify أو اسم الأغنية في خانة البحث لأمر /play."); return; }
     try {
-      const queued = await enqueueMusic(ctx.client, ctx.guild, voiceChannel.id, ctx.channel.id, ctx.user, query);
+      const queued = await enqueueMusic(ctx.client, ctx.guild, voiceChannel.id, ctx.channel.id, {
+        id: ctx.user.id,
+        username: ctx.user.username
+      }, query);
       if (queued.position > 1) await ctx.reply(`أُضيف **${queued.title}** إلى قائمة التشغيل في المركز ${queued.position}.`);
       else await ctx.reply(`بدأ تجهيز **${queued.title}** للتشغيل في <#${voiceChannel.id}>.${queued.playlistSize > 1 ? ` أُضيف ${queued.playlistSize} مسار من النتائج.` : ""}`);
     } catch (error: any) {
@@ -39,6 +37,16 @@ const command: BotCommand = {
         await ctx.reply("أرسل رابط أغنية Spotify مفردة؛ روابط الألبومات وقوائم التشغيل غير مدعومة.");
       } else if (error?.message === "BOT_IN_ANOTHER_VOICE_CHANNEL") {
         await ctx.reply("البوت يشغّل الموسيقى حاليًا في قناة صوتية أخرى.");
+      } else if (error?.message === "MUSIC_BOT_NOT_READY") {
+        await ctx.reply("بوت الموسيقى المنفصل ما زال يتصل؛ انتظر قليلًا ثم أعد المحاولة.");
+      } else if (error?.message === "MUSIC_BOT_NOT_IN_GUILD") {
+        await ctx.reply("أضف بوت الموسيقى إلى هذا السيرفر من صفحة إعدادات الموسيقى في الداشبورد.");
+      } else if (error?.message === "MUSIC_BOT_MISSING_PERMISSIONS") {
+        await ctx.reply("امنح بوت الموسيقى صلاحيات View Channel وConnect وSpeak في القناة الصوتية.");
+      } else if (error?.message === "MUSIC_VOICE_CHANNEL_UNAVAILABLE") {
+        await ctx.reply("تعذر على بوت الموسيقى الوصول إلى القناة الصوتية. تحقق من إضافته وصلاحياته.");
+      } else if (error?.message === "MUSIC_BOT_DECRYPTION_FAILED") {
+        await ctx.reply("تعذر فك تشفير إعداد بوت الموسيقى. راجع MUSIC_BOT_ENCRYPTION_KEY في الاستضافة.");
       } else if (error?.message === "TRACK_NOT_FOUND") {
         await ctx.reply("ما لقيت نتيجة قابلة للتشغيل. جرّب عنوانًا أوضح أو رابط YouTube مباشرًا.");
       } else {

@@ -17,6 +17,9 @@ services:
         sync: false
       - key: NEXTAUTH_SECRET
         generateValue: true
+      # مفتاح دائم لتشفير توكن بوت الموسيقى المنفصل في قاعدة البيانات.
+      - key: MUSIC_BOT_ENCRYPTION_KEY
+        generateValue: true
       # سر توقيع روابط التحميل التي يرسلها الأمر ,dw (نفس القيمة للبوت واللوحة تلقائيًا)
       - key: DOWNLOADER_SECRET
         generateValue: true

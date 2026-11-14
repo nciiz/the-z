@@ -14,3 +14,4 @@ export * from "./models/ServerTemplate";
 export * from "./models/LogEntry";
 export * from "./models/CountingState";
 export * from "./models/CountingEntry";
+export * from "./models/MusicBotCredential";

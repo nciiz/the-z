@@ -89,9 +89,12 @@ TMDB_API_KEY=...                        # اختياري — ميزة الأفل
 OMDB_API_KEY=...                        # اختياري — تقييم IMDb
 DEEPL_API_KEY=...                       # اختياري — يستخدم DeepL أولاً ثم ينتقل إلى مزودي احتياط عند تعذره
 DOWNLOADER_SECRET=قيمة عشوائية طويلة    # اختياري — توقيع روابط التحميل
+MUSIC_BOT_ENCRYPTION_KEY=قيمة hex من openssl rand -hex 32  # نفس القيمة في البوت والداشبورد
 ```
 
 يشغّل Lavalink مصدر YouTube. يمكن إرسال رابط YouTube مباشر أو البحث باسم الأغنية. عند إرسال رابط Spotify مفرد، يقرأ البوت عنوانه عبر oEmbed العام ثم يبحث عن هذا العنوان على YouTube؛ وقد تختلف النسخة التي يجدها عن تسجيل Spotify. لا يحتاج هذا المسار إلى Spotify Premium أو مفاتيح Jamendo. تشغيل المصدر يعتمد على إتاحة YouTube وقد يتغير عند تحديث الخدمة أو المصدر.
+
+لإبقاء البوت الأساسي في روم AFK أثناء تشغيل الموسيقى، افتح **إعدادات الموسيقى** في لوحة السيرفر وأدخل Bot Token لبوت Discord ثانٍ. أضف البوت الثاني إلى السيرفر نفسه بصلاحيات View Channel وConnect وSpeak وSend Messages وEmbed Links. يُتحقق من التوكن عبر Discord ويُخزن مشفرًا بـ AES-256-GCM. أضف `MUSIC_BOT_ENCRYPTION_KEY` نفسه إلى بيئة البوت والداشبورد (ولّده بـ `openssl rand -hex 32`)؛ إذا غيّرته لاحقًا، أعد حفظ التوكن من الداشبورد.
 
 **`dashboard/.env.local`**
 ```
@@ -103,6 +106,7 @@ NEXTAUTH_URL=http://localhost:3000
 DATABASE_URL=postgresql://user:password@host:5432/dbname?sslmode=require
 OWNER_ID=آيدي حسابك على ديسكورد        # يمنحك وصولاً كاملاً للوحة دائمًا
 DOWNLOADER_SECRET=نفس القيمة في البوت   # اختياري (وإلا يُستخدم NEXTAUTH_SECRET)
+MUSIC_BOT_ENCRYPTION_KEY=نفس القيمة في bot/.env
 ```
 
 ## 🏗️ البناء والتشغيل (تطوير)

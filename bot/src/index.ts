@@ -5,7 +5,7 @@ import { loadCommands } from "./handlers/commandHandler";
 import { loadContextMenus } from "./handlers/contextMenuHandler";
 import { loadEvents } from "./handlers/eventHandler";
 import { registerAllModules } from "./modules";
-import { initializeLavalink } from "./modules/music/musicManager";
+import { initializeLavalink, shutdownMusicBots } from "./modules/music/musicManager";
 import { logError, logInfo, sanitizeError } from "./utils/logger";
 import dns from "node:dns";
 // @ts-ignore - optional dependency for Render proxy
@@ -38,6 +38,7 @@ async function gracefulShutdown(code: number): Promise<void> {
   }
   try {
     if (client) {
+      shutdownMusicBots(client);
       await client.destroy();
       client = null;
     }
