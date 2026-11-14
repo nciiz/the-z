@@ -15,48 +15,6 @@ export interface SpotifyCollection {
   tracks: SpotifyTrack[];
 }
 
-interface SpotifyApiArtist {
-  name?: string;
-}
-
-interface SpotifyApiImage {
-  url?: string;
-}
-
-interface SpotifyApiTrack {
-  name?: string;
-  artists?: SpotifyApiArtist[];
-  duration_ms?: number;
-  external_urls?: { spotify?: string };
-  album?: { images?: SpotifyApiImage[] };
-  type?: string;
-  is_local?: boolean;
-}
-
-interface SpotifyApiAlbum {
-  name?: string;
-  images?: SpotifyApiImage[];
-}
-
-interface SpotifyApiPlaylist {
-  name?: string;
-  images?: SpotifyApiImage[];
-}
-
-interface SpotifyApiPage<T> {
-  items?: T[];
-  next?: string | null;
-}
-
-interface SpotifyApiPlaylistItem {
-  track?: SpotifyApiTrack | null;
-}
-
-interface SpotifyApiTokenResponse {
-  access_token?: string;
-  expires_in?: number;
-}
-
 interface SpotifyEmbedImage {
   url?: string;
   maxHeight?: number;
@@ -87,21 +45,10 @@ interface SpotifyEmbedEntity {
   visualIdentity?: { image?: SpotifyEmbedImage[] };
 }
 
-const API_BASE = "https://api.spotify.com/v1";
-const TOKEN_URL = "https://accounts.spotify.com/api/token";
 const COLLECTION_LIMIT = Math.max(
   1,
   Math.min(100, Number.parseInt(process.env.SPOTIFY_COLLECTION_LIMIT ?? "25", 10) || 25)
 );
-
-let tokenCache: { accessToken: string; expiresAt: number } | undefined;
-
-function getCredentials(): { id: string; secret: string } | undefined {
-  const id = process.env.SPOTIFY_CLIENT_ID?.trim();
-  const secret = process.env.SPOTIFY_CLIENT_SECRET?.trim();
-  if (!id || !secret) return undefined;
-  return { id, secret };
-}
 
 export function isSpotifyUrl(value: string): boolean {
   try {
@@ -151,76 +98,6 @@ async function canonicalizeSpotifyUrl(value: string): Promise<string> {
   } catch {
     throw new Error("SPOTIFY_LINK_RESOLVE_FAILED");
   }
-}
-
-async function getAccessToken(): Promise<string> {
-  const credentials = getCredentials();
-  if (!credentials) throw new Error("SPOTIFY_CREDENTIALS_REQUIRED");
-  if (tokenCache && tokenCache.expiresAt > Date.now() + 60_000) return tokenCache.accessToken;
-
-  const basic = Buffer.from(`${credentials.id}:${credentials.secret}`, "utf8").toString("base64");
-  const response = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${basic}`,
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: "grant_type=client_credentials",
-    signal: AbortSignal.timeout(15_000)
-  });
-  if (!response.ok) throw new Error(`SPOTIFY_AUTH_HTTP_${response.status}`);
-
-  const data = await response.json() as SpotifyApiTokenResponse;
-  if (!data.access_token) throw new Error("SPOTIFY_AUTH_INVALID_RESPONSE");
-  const expiresIn = typeof data.expires_in === "number" && data.expires_in > 0 ? data.expires_in : 3600;
-  tokenCache = {
-    accessToken: data.access_token,
-    expiresAt: Date.now() + expiresIn * 1000
-  };
-  return tokenCache.accessToken;
-}
-
-async function spotifyGet<T>(pathname: string, retried = false): Promise<T> {
-  const token = await getAccessToken();
-  const response = await fetch(`${API_BASE}${pathname}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(15_000)
-  });
-
-  if (response.status === 401 && !retried) {
-    tokenCache = undefined;
-    return spotifyGet<T>(pathname, true);
-  }
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    console.warn("[music/spotify] API request failed:", {
-      path: pathname.slice(0, 160),
-      status: response.status,
-      detail: detail.slice(0, 300)
-    });
-    throw new Error(`SPOTIFY_API_HTTP_${response.status}`);
-  }
-  return response.json() as Promise<T>;
-}
-
-function mapApiTrack(track: SpotifyApiTrack | null | undefined, fallbackArtwork?: string): SpotifyTrack | undefined {
-  const title = track?.name?.trim();
-  if (!track || !title) return undefined;
-  if (track.type && track.type !== "track") return undefined;
-
-  const artists = (track.artists ?? [])
-    .map((artist) => artist.name?.trim())
-    .filter((name): name is string => Boolean(name))
-    .join(", ");
-  const artwork = track.album?.images?.find((image) => image.url)?.url || fallbackArtwork;
-
-  return {
-    title,
-    artists: artists || "Spotify",
-    durationMs: typeof track.duration_ms === "number" ? track.duration_ms : undefined,
-    url: track.external_urls?.spotify,
-    artworkUrl: artwork
-  };
 }
 
 async function oembedTrack(canonicalUrl: string): Promise<{ title: string; author: string }> {
@@ -333,42 +210,6 @@ function embedEntityToCollection(
   };
 }
 
-async function fetchAlbumTracks(albumId: string, limit: number): Promise<SpotifyApiTrack[]> {
-  const collected: SpotifyApiTrack[] = [];
-  let offset = 0;
-  while (collected.length < limit) {
-    const pageSize = Math.min(50, limit - collected.length);
-    const page = await spotifyGet<SpotifyApiPage<SpotifyApiTrack>>(
-      `/albums/${encodeURIComponent(albumId)}/tracks?limit=${pageSize}&offset=${offset}`
-    );
-    const items = page.items ?? [];
-    collected.push(...items);
-    if (items.length < pageSize || !page.next) break;
-    offset += items.length;
-  }
-  return collected.slice(0, limit);
-}
-
-async function fetchPlaylistTracks(playlistId: string, limit: number): Promise<SpotifyApiTrack[]> {
-  const collected: SpotifyApiTrack[] = [];
-  let offset = 0;
-  while (collected.length < limit) {
-    const pageSize = Math.min(100, limit - collected.length);
-    const page = await spotifyGet<SpotifyApiPage<SpotifyApiPlaylistItem>>(
-      `/playlists/${encodeURIComponent(playlistId)}/tracks?limit=${pageSize}&offset=${offset}`
-    );
-    const items = page.items ?? [];
-    for (const item of items) {
-      const track = item?.track;
-      if (track) collected.push(track);
-      if (collected.length >= limit) break;
-    }
-    if (items.length < pageSize || !page.next) break;
-    offset += items.length;
-  }
-  return collected.slice(0, limit);
-}
-
 export async function resolveSpotify(value: string): Promise<SpotifyCollection> {
   const canonical = await canonicalizeSpotifyUrl(value);
   const parsed = parseSpotifyPath(canonical);
@@ -376,20 +217,6 @@ export async function resolveSpotify(value: string): Promise<SpotifyCollection> 
   if (parsed.kind === "artist" || parsed.kind === "episode") throw new Error("SPOTIFY_COLLECTION_UNSUPPORTED");
 
   if (parsed.kind === "track") {
-    if (getCredentials()) {
-      try {
-        const track = mapApiTrack(await spotifyGet<SpotifyApiTrack>(`/tracks/${encodeURIComponent(parsed.id)}`));
-        if (track) {
-          return { kind: "track", title: track.title, url: parsed.canonicalUrl, tracks: [track] };
-        }
-      } catch (error) {
-        console.warn(
-          "[music/spotify] API track lookup failed; trying the public embed page:",
-          error instanceof Error ? error.message : String(error)
-        );
-      }
-    }
-
     try {
       const entity = await fetchEmbedEntity(parsed.canonicalUrl);
       const track = embedEntityToTrack(entity, parsed.canonicalUrl);
@@ -411,44 +238,6 @@ export async function resolveSpotify(value: string): Promise<SpotifyCollection> 
   }
 
   const kind: "album" | "playlist" = parsed.kind === "album" ? "album" : "playlist";
-
-  if (getCredentials()) {
-    try {
-      if (kind === "album") {
-        const album = await spotifyGet<SpotifyApiAlbum>(`/albums/${encodeURIComponent(parsed.id)}`);
-        const fallbackArtwork = album.images?.find((image) => image.url)?.url;
-        const tracks = (await fetchAlbumTracks(parsed.id, COLLECTION_LIMIT))
-          .map((track) => mapApiTrack(track, fallbackArtwork))
-          .filter((track): track is SpotifyTrack => Boolean(track));
-        if (!tracks.length) throw new Error("SPOTIFY_EMPTY_COLLECTION");
-        return {
-          kind,
-          title: album.name?.trim() || "ألبوم Spotify",
-          url: parsed.canonicalUrl,
-          tracks
-        };
-      }
-
-      const playlist = await spotifyGet<SpotifyApiPlaylist>(`/playlists/${encodeURIComponent(parsed.id)}`);
-      const fallbackArtwork = playlist.images?.find((image) => image.url)?.url;
-      const tracks = (await fetchPlaylistTracks(parsed.id, COLLECTION_LIMIT))
-        .map((track) => mapApiTrack(track, fallbackArtwork))
-        .filter((track): track is SpotifyTrack => Boolean(track));
-      if (!tracks.length) throw new Error("SPOTIFY_EMPTY_COLLECTION");
-      return {
-        kind,
-        title: playlist.name?.trim() || "قائمة Spotify",
-        url: parsed.canonicalUrl,
-        tracks
-      };
-    } catch (error) {
-      console.warn(
-        `[music/spotify] API ${kind} lookup failed; trying the public embed page:`,
-        error instanceof Error ? error.message : String(error)
-      );
-    }
-  }
-
   try {
     const entity = await fetchEmbedEntity(parsed.canonicalUrl);
     return embedEntityToCollection(entity, kind, parsed.canonicalUrl);
@@ -457,7 +246,6 @@ export async function resolveSpotify(value: string): Promise<SpotifyCollection> 
       `[music/spotify] Public embed lookup failed for ${kind}:`,
       error instanceof Error ? error.message : String(error)
     );
+    throw new Error("SPOTIFY_RESOLVE_FAILED");
   }
-
-  throw new Error("SPOTIFY_RESOLVE_FAILED");
 }

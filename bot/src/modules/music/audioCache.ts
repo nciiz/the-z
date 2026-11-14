@@ -25,6 +25,7 @@ const STALE_JOB_AGE_MS = ENTRY_TTL_MS + 60 * 60_000;
 const SERVER_BIND_HOST = process.env.MUSIC_AUDIO_BIND_HOST?.trim() || "127.0.0.1";
 const SERVER_PORT = envInt("MUSIC_AUDIO_PORT", 0, 0, 65_535);
 const PUBLIC_BASE_URL = process.env.MUSIC_AUDIO_PUBLIC_URL?.trim().replace(/\/+$/, "");
+const YTDLP_PROXY = process.env.MUSIC_PROXY?.trim() || process.env.YTDLP_PROXY?.trim();
 
 interface AudioEntry {
   token: string;
@@ -94,6 +95,78 @@ function getCookiesArgs(): string[] {
   return [];
 }
 
+function getProxyArgs(): string[] {
+  return YTDLP_PROXY ? ["--proxy", YTDLP_PROXY] : [];
+}
+
+let cookiesLogged = false;
+function logCookieStatus(cookieArgs: string[]): void {
+  if (cookiesLogged) return;
+  cookiesLogged = true;
+  if (cookieArgs.length) {
+    console.log(`[music/audio] yt-dlp cookies loaded from ${cookieArgs[1]}`);
+  } else {
+    console.log("[music/audio] yt-dlp cookies are not configured; YouTube may require them on cloud hosts.");
+  }
+}
+
+let envCookiesPromise: Promise<void> | undefined;
+function ensureEnvCookiesFile(): Promise<void> {
+  if (!envCookiesPromise) envCookiesPromise = writeEnvCookiesFile();
+  return envCookiesPromise;
+}
+
+async function writeEnvCookiesFile(): Promise<void> {
+  const base64 = process.env.MUSIC_COOKIES_BASE64?.trim() || process.env.YTDLP_COOKIES_BASE64?.trim();
+  const raw = process.env.MUSIC_COOKIES?.trim() || process.env.YTDLP_COOKIES?.trim();
+  if (!base64 && !raw) return;
+
+  const explicitPaths = [
+    process.env.MUSIC_COOKIES_PATH,
+    process.env.YTDLP_COOKIES_PATH,
+    process.env.COOKIES_PATH
+  ].filter((value): value is string => Boolean(value));
+  for (const candidate of explicitPaths) {
+    try {
+      if (fs.existsSync(candidate) && fs.statSync(candidate).size > 10) return;
+    } catch {
+      // تابع إلى ملف البيئة المؤقت
+    }
+  }
+
+  let content: string;
+  if (base64) {
+    try {
+      content = Buffer.from(base64, "base64").toString("utf8");
+    } catch {
+      console.warn("[music/audio] MUSIC_COOKIES_BASE64 is not valid base64; ignoring it.");
+      return;
+    }
+  } else {
+    content = raw!.replace(/\\n/g, "\n");
+  }
+
+  content = content.replace(/\r\n/g, "\n");
+  if (!content.trim() || (!content.includes("\t") && !/# (?:Netscape|HTTP) Cookie File/i.test(content))) {
+    console.warn(
+      "[music/audio] MUSIC_COOKIES_BASE64/MUSIC_COOKIES does not look like a Netscape cookies.txt file; ignoring it."
+    );
+    return;
+  }
+
+  try {
+    await fs.promises.mkdir(TEMP_ROOT, { recursive: true });
+    const destination = path.join(TEMP_ROOT, "cookies.txt");
+    await fs.promises.writeFile(destination, content, { mode: 0o600 });
+    console.log("[music/audio] YouTube cookies loaded from environment.");
+  } catch (error) {
+    console.warn(
+      "[music/audio] Failed to write cookies from environment:",
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+}
+
 function ytDlpErrorText(error: unknown): string {
   const candidate = error as { message?: string; stderr?: string };
   return `${candidate.message ?? ""} ${candidate.stderr ?? ""}`;
@@ -103,6 +176,10 @@ function isRetryableYouTubeError(error: unknown): boolean {
   return /sign in to confirm|not a bot|403|forbidden|unable to extract|nsig|player response|failed to extract|no video formats/i.test(
     ytDlpErrorText(error)
   );
+}
+
+function isBotCheckError(error: unknown): boolean {
+  return /sign in to confirm|not a bot|use --cookies/i.test(ytDlpErrorText(error));
 }
 
 async function clearDirectory(directory: string): Promise<void> {
@@ -365,6 +442,12 @@ async function downloadWithYtDlp(args: string[], identifier: string, jobDir: str
     } catch (error) {
       lastError = error;
       await clearDirectory(jobDir);
+      if (isBotCheckError(error)) {
+        console.warn(
+          "[music/audio] YouTube requested a bot check; alternate clients will not help without valid cookies. Skipping retries."
+        );
+        break;
+      }
       if (attempt >= attempts.length - 1 || !isRetryableYouTubeError(error)) break;
       console.warn(
         `[music/audio] yt-dlp attempt ${attempt + 1} failed for a YouTube source; retrying with an alternate client...`
@@ -387,10 +470,13 @@ export async function prepareAudio(identifier: string): Promise<PreparedAudio> {
   let jobDir: string | undefined;
   try {
     await fs.promises.mkdir(TEMP_ROOT, { recursive: true });
+    await ensureEnvCookiesFile();
     await sweepStaleJobsIfNeeded();
     jobDir = await fs.promises.mkdtemp(path.join(TEMP_ROOT, "job-"));
 
     const outputTemplate = path.join(jobDir, "audio.%(ext)s");
+    const cookieArgs = getCookiesArgs();
+    logCookieStatus(cookieArgs);
     const args = [
       "--no-warnings",
       "--no-playlist",
@@ -405,7 +491,8 @@ export async function prepareAudio(identifier: string): Promise<PreparedAudio> {
       "--no-write-playlist-metafiles",
       "--no-progress",
       "--output", outputTemplate,
-      ...getCookiesArgs()
+      ...getCookiesArgs(),
+      ...getProxyArgs()
     ];
 
     await downloadWithYtDlp(args, identifier, jobDir);
@@ -476,6 +563,7 @@ export async function prepareAudio(identifier: string): Promise<PreparedAudio> {
       stderr: processError.stderr?.trim().slice(-2_000)
     });
 
+    if (processError.message === "YOUTUBE_BOT_CHECK" || isBotCheckError(error)) throw new Error("YOUTUBE_BOT_CHECK");
     if (/max-filesize|larger than|file is larger/i.test(detail)) throw new Error("AUDIO_FILE_TOO_LARGE");
     if (/timed out|timeout|ETIMEDOUT/i.test(detail)) throw new Error("AUDIO_DOWNLOAD_TIMEOUT");
     throw new Error("AUDIO_SOURCE_UNAVAILABLE");

@@ -62,6 +62,8 @@ const command: BotCommand = {
         await ctx.reply("ما لقيت نتيجة قابلة للتشغيل. جرّب عنوانًا أوضح أو رابط YouTube مباشرًا.");
       } else if (error?.message === "NO_PLAYABLE_SEARCH_RESULT") {
         await ctx.reply("ما لقيت نتيجة صوتية قابلة للتشغيل. جرّب اسم الفنان مع الأغنية أو رابطًا مباشرًا من YouTube.");
+      } else if (error?.message === "YOUTUBE_BOT_CHECK") {
+        await ctx.reply("YouTube يطلب تسجيل دخول من عنوان الاستضافة (bot check). أضف ملف cookies لـ yt-dlp عبر `MUSIC_COOKIES_PATH` أو `MUSIC_COOKIES_BASE64`، أو استخدم رابط SoundCloud.");
       } else if (error?.message === "AUDIO_FILE_TOO_LARGE") {
         await ctx.reply("الملف الصوتي أكبر من الحد المسموح. جرّب أغنية أقصر أو ارفع `MUSIC_MAX_FILE_SIZE_MB` في بيئة البوت.");
       } else if (error?.message === "AUDIO_DOWNLOAD_TIMEOUT") {

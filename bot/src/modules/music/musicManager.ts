@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { decryptMusicBotToken, IMusicBotCredential, MusicBotCredential } from "@thez/shared";
 import { ExtendedClient } from "../../client";
 import { logInfo } from "../../utils/logger";
-import { prepareAudio, releaseAudioToken, shutdownAudioCache } from "./audioCache";
+import { PreparedAudio, prepareAudio, releaseAudioToken, shutdownAudioCache } from "./audioCache";
 import { isSpotifyUrl, resolveSpotify, SpotifyCollection } from "./spotify";
 
 const nodeReady = new WeakMap<ExtendedClient, boolean>();
@@ -123,6 +123,7 @@ function attachTrackAnnouncements(discord: DiscordClient, manager: LavalinkManag
       message: exception?.message,
       cause: exception?.cause
     });
+    releaseAudioToken(trackAudioToken(track));
     const channel = getTextChannel(player);
     await channel?.send(`تعذر تشغيل **${title.slice(0, 180)}**: ${String(message).slice(0, 240)}`).catch(() => undefined);
   });
@@ -130,6 +131,7 @@ function attachTrackAnnouncements(discord: DiscordClient, manager: LavalinkManag
   manager.on("trackStuck", async (player, track, payload) => {
     const title = track?.info?.title || "المقطع";
     console.warn(`[music/lavalink] trackStuck guild=${player.guildId} title=${title} thresholdMs=${payload?.thresholdMs}`);
+    releaseAudioToken(trackAudioToken(track));
     const channel = getTextChannel(player);
     await channel?.send(`توقف مصدر الصوت للمقطع **${title.slice(0, 180)}** ولم يصل صوت خلال ${payload?.thresholdMs ?? "المدة المحددة"}ms.`).catch(() => undefined);
   });
@@ -380,15 +382,30 @@ interface DisplayMetadata {
   artworkUrl?: string;
 }
 
-/**
- * Downloads the audio with yt-dlp and returns a loopback HTTP URL. YouTube's
- * direct googlevideo URLs return 403 to Lavalink because they are tied to the
- * extractor's request headers, so handing them to Lavalink directly does not
- * work. The local cache server forwards the exact bytes with Range support.
- */
-async function resolveAudio(input: string, isSearch: boolean): Promise<ResolvedAudio> {
-  const identifier = isSearch ? `ytsearch1:${input}` : input;
-  const audio = await prepareAudio(identifier);
+const YOUTUBE_BLOCK_COOLDOWN_MS = 10 * 60_000;
+let youtubeBlockedUntil = 0;
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isYouTubeBotCheck(error: unknown): boolean {
+  return error instanceof Error && error.message === "YOUTUBE_BOT_CHECK";
+}
+
+function isFallbackableSearchError(error: unknown): boolean {
+  return error instanceof Error && (
+    error.message === "YOUTUBE_BOT_CHECK" ||
+    error.message === "AUDIO_SOURCE_UNAVAILABLE"
+  );
+}
+
+function shouldPreferSoundCloud(): boolean {
+  if (/^(1|true|yes)$/i.test(process.env.MUSIC_PREFER_SOUNDCLOUD ?? "")) return true;
+  return Date.now() < youtubeBlockedUntil;
+}
+
+function toResolvedAudio(audio: PreparedAudio): ResolvedAudio {
   return {
     streamUrl: audio.url,
     audioToken: audio.token,
@@ -398,6 +415,68 @@ async function resolveAudio(input: string, isSearch: boolean): Promise<ResolvedA
     webpageUrl: audio.webpageUrl,
     artworkUrl: audio.artworkUrl
   };
+}
+
+/**
+ * Downloads the audio with yt-dlp and returns a loopback HTTP URL. YouTube's
+ * direct googlevideo URLs return 403 to Lavalink because they are tied to the
+ * extractor's request headers, so handing them to Lavalink directly does not
+ * work. The local cache server forwards the exact bytes with Range support.
+ *
+ * Search results fall back to SoundCloud when YouTube rejects the host IP with
+ * a "confirm you're not a bot" challenge. Direct URLs still require valid
+ * YouTube cookies (or a proxy) because there is no equivalent search query.
+ */
+async function resolveAudio(input: string, isSearch: boolean): Promise<ResolvedAudio> {
+  if (!isSearch) {
+    try {
+      return toResolvedAudio(await prepareAudio(input));
+    } catch (error) {
+      if (isYouTubeBotCheck(error)) {
+        youtubeBlockedUntil = Date.now() + YOUTUBE_BLOCK_COOLDOWN_MS;
+        console.warn("[music/resolve] YouTube requested a bot check; preferring SoundCloud for 10 minutes.");
+      }
+      throw error;
+    }
+  }
+
+  const searchQuery = input.trim();
+  let triedSoundCloud = false;
+  const trySoundCloud = async (): Promise<ResolvedAudio> => {
+    triedSoundCloud = true;
+    return toResolvedAudio(await prepareAudio(`scsearch1:${searchQuery}`));
+  };
+
+  if (shouldPreferSoundCloud()) {
+    try {
+      return await trySoundCloud();
+    } catch (soundCloudError) {
+      if (errorText(soundCloudError).startsWith("AUDIO_SERVER_UNAVAILABLE")) throw soundCloudError;
+      console.warn("[music/resolve] SoundCloud search failed; trying YouTube:", errorText(soundCloudError));
+    }
+  }
+
+  try {
+    return toResolvedAudio(await prepareAudio(`ytsearch1:${searchQuery}`));
+  } catch (youtubeError) {
+    if (isYouTubeBotCheck(youtubeError)) {
+      youtubeBlockedUntil = Date.now() + YOUTUBE_BLOCK_COOLDOWN_MS;
+      console.warn("[music/resolve] YouTube requested a bot check; preferring SoundCloud for 10 minutes.");
+    }
+
+    if (!triedSoundCloud && isFallbackableSearchError(youtubeError)) {
+      console.warn("[music/resolve] YouTube search failed; trying SoundCloud search:", errorText(youtubeError));
+      try {
+        return await trySoundCloud();
+      } catch (soundCloudError) {
+        console.warn("[music/resolve] SoundCloud fallback failed:", errorText(soundCloudError));
+        if (isYouTubeBotCheck(youtubeError)) throw youtubeError;
+        throw soundCloudError;
+      }
+    }
+
+    throw youtubeError;
+  }
 }
 
 async function enqueueResolvedTrack(

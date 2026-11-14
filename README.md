@@ -90,20 +90,33 @@ OMDB_API_KEY=...                        # اختياري — تقييم IMDb
 DEEPL_API_KEY=...                       # اختياري — يستخدم DeepL أولاً ثم ينتقل إلى مزودي احتياط عند تعذره
 DOWNLOADER_SECRET=قيمة عشوائية طويلة    # اختياري — توقيع روابط التحميل
 MUSIC_BOT_ENCRYPTION_KEY=قيمة hex من openssl rand -hex 32  # نفس القيمة في البوت والداشبورد
-SPOTIFY_CLIENT_ID=...                   # اختياري — يحسّن قراءة Spotify عبر Web API (حساب مجاني يكفي)
-SPOTIFY_CLIENT_SECRET=...               # اختياري — مع SPOTIFY_CLIENT_ID
 SPOTIFY_COLLECTION_LIMIT=25             # اختياري — حد مسارات الألبوم/القائمة (1-100)
 MUSIC_MAX_FILE_SIZE_MB=40               # اختياري — حد ملف الصوت المؤقت
 MUSIC_DOWNLOAD_TIMEOUT_SECONDS=120      # اختياري — مهلة تحميل المسار
 MUSIC_TEMP_DIR=/tmp/the-z-music         # اختياري — مجلد الكاش الصوتي
+MUSIC_COOKIES_PATH=/etc/secrets/youtube-cookies.txt  # اختياري — Render Secret File
+MUSIC_COOKIES_BASE64=...                # بديل للملف: base64 لملف cookies.txt
+MUSIC_PROXY=...                         # اختياري — بروكسي لـ yt-dlp
+MUSIC_PREFER_SOUNDCLOUD=false           # اختياري — اجعل SoundCloud أولًا للبحث
 ```
 
 يحمّل البوت الصوت عبر `yt-dlp` إلى كاش مؤقت داخل نفس الحاوية، ثم يقدّمه إلى Lavalink عبر خادم HTTP محلي محمي برمز عشوائي. هذا المسار مقصود: روابط `googlevideo` المباشرة ترتبط بترويسات طلب المستخرج وتعود بـ `403` عند تمريرها إلى مصدر HTTP في Lavalink.
 
 روابط Spotify:
-- **أغنية أو ألبوم أو قائمة تشغيل عامة:** تعمل **بدون أي مفاتيح وبدون Spotify Premium**؛ يقرأ البوت البيانات من صفحة Spotify العامة (embed) أو oEmbed، ثم يبحث عن نسخة صوتية مطابقة على YouTube. قد تختلف النسخة عن تسجيل Spotify.
-- **مفاتيح Spotify Web API اختيارية:** إن أضفت `SPOTIFY_CLIENT_ID` و`SPOTIFY_CLIENT_SECRET` من [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) (Client Credentials) يحاول البوت API أولًا ثم يعود للصفحة العامة عند التعذر. **حساب Spotify المجاني يكفي لإنشاء التطبيق؛ لا حاجة إلى Premium.**
+- **روابط Spotify العامة تعمل بدون `SPOTIFY_CLIENT_ID` أو `SPOTIFY_CLIENT_SECRET` وبدون Spotify Premium.** يقرأ البوت العنوان والفنان من صفحة embed العامة أو oEmbed، ثم يبحث عن نسخة صوتية مطابقة على YouTube أو SoundCloud ويجهزها عبر `yt-dlp`. قد تختلف النسخة عن تسجيل Spotify، لأن Spotify لا يرسل الصوت إلى البوت.
 - تُضاف مسارات الألبوم/القائمة بالترتيب حتى حد `SPOTIFY_COLLECTION_LIMIT`، ويُتخطى أي مسار تعذّر تجهيزه. القوائم الخاصة قد لا تكون قابلة للقراءة.
+
+### YouTube على الاستضافات السحابية (Render)
+
+قد يرفض YouTube الطلبات القادمة من IP الاستضافة برسالة **`Sign in to confirm you're not a bot`**. عند البحث بالاسم أو تشغيل رابط Spotify، يتحول البوت تلقائيًا إلى البحث في SoundCloud كخطة احتياطية. أما روابط YouTube المباشرة فتحتاج إلى cookies صالحة (أو بروكسي).
+
+**إضافة YouTube cookies على Render:**
+1. صدّر `cookies.txt` بصيغة Netscape من متصفح مسجّل فيه حساب YouTube (مثل إضافة **Get cookies.txt LOCALLY**). لا ترفع الملف إلى Git.
+2. من لوحة Render: **Environment → Secret Files → Add Secret File**، الاسم `youtube-cookies.txt`، والصق محتوى الملف.
+3. أضف متغير البيئة `MUSIC_COOKIES_PATH=/etc/secrets/youtube-cookies.txt` ثم أعد النشر.
+4. بديل بدون Secret File: نفّذ `base64 -w0 cookies.txt` وضع الناتج في `MUSIC_COOKIES_BASE64`.
+
+الكوكيز تنتهي مع الوقت؛ حدّثها عند تكرار الخطأ. يمكن أيضًا ضبط `MUSIC_PROXY` لتمرير yt-dlp عبر بروكسي، أو `MUSIC_PREFER_SOUNDCLOUD=true` لتفضيل SoundCloud في البحث دائمًا.
 
 عند تشغيل Lavalink على خادم منفصل عن البوت، اضبط `MUSIC_AUDIO_PUBLIC_URL` ليشير إلى خادم الملفات المؤقتة، و`MUSIC_AUDIO_BIND_HOST=0.0.0.0` عند الحاجة. في النشر الافتراضي (Lavalink والبوت داخل نفس الحاوية) لا يلزم ضبط أي منهما.
 
