@@ -37,7 +37,6 @@ import {
   Download,
   Bell,
   ChevronDown,
-  Music2
 } from "lucide-react";
 
 interface NavItem {
@@ -81,7 +80,6 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/roles", label: "الرولات والألوان", icon: User },
       { href: "/reaction-roles", label: "رولات الرياكشن", icon: Smile },
       { href: "/voice", label: "الرومات الصوتية", icon: Mic },
-      { href: "/music", label: "إعدادات الموسيقى", icon: Music2 },
       { href: "/member-counter", label: "عداد الأعضاء", icon: Hash },
       { href: "/counting", label: "لعبة العد", icon: ListOrdered },
       { href: "/tickets", label: "نظام التذاكر", icon: Ticket }

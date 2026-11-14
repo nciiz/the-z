@@ -32,7 +32,6 @@ the_z/
 | ⛓️ نظام السجن | سجن مؤقت (إزالة الرتب واستعادتها تلقائياً عند انتهاء المدة)، أوامر `,jail`/`,unjail` |
 | 🔢 عداد الأعضاء | رومات/قنوات عداد تتحدث تلقائياً بعدد الأعضاء/البوتات |
 | 🔢 لعبة العد | قناة أرقام ومسائل حسابية متسلسلة، علامة صح للإجابة الصحيحة، تراجع تلقائي عند حذفها، منع تكرار اللاعب، وحفظ الجولة بعد إعادة التشغيل |
-| 🎵 الموسيقى | تشغيل YouTube وSoundCloud أو البحث بالاسم، ودعم Spotify (أغنية/ألبوم/قائمة تشغيل) عبر yt-dlp وLavalink مع كاش صوتي محلي وقائمة انتظار وأوامر تحكم |
 | ⏰ الرسائل المجدولة | رسائل متكررة (كل N دقيقة/يومياً) أو لمرة واحدة |
 | ⭐ الستار بورد | تثبيت الرسائل التي تصل حدًا من التفاعلات في روم مخصص (عتبة/إيموجي/تجاهل قنوات ورتب) |
 | 🩺 صحة السيرفر | صفحة تشخيص تعرض اتصال البوت/القاعدة/Redis والمهام المجدولة ومشاكل الإعدادات |
@@ -48,7 +47,6 @@ the_z/
 - تطبيق Discord (Bot + OAuth2) من [Discord Developer Portal](https://discord.com/developers/applications)
 - (اختياري) Redis — عند غيابه يعمل البوت على ذاكرة العملية للبيانات المؤقتة فقط
 - (اختياري) مفاتيح خدمات خارجية: `TMDB_API_KEY` و`OMDB_API_KEY` لميزة الأفلام، و`DEEPL_API_KEY` للترجمة
-- Java 21 داخل Docker لتشغيل عقدة Lavalink المضمّنة للموسيقى
 
 ## 🔑 إعداد تطبيق Discord
 
@@ -89,38 +87,7 @@ TMDB_API_KEY=...                        # اختياري — ميزة الأفل
 OMDB_API_KEY=...                        # اختياري — تقييم IMDb
 DEEPL_API_KEY=...                       # اختياري — يستخدم DeepL أولاً ثم ينتقل إلى مزودي احتياط عند تعذره
 DOWNLOADER_SECRET=قيمة عشوائية طويلة    # اختياري — توقيع روابط التحميل
-MUSIC_BOT_ENCRYPTION_KEY=قيمة hex من openssl rand -hex 32  # نفس القيمة في البوت والداشبورد
-SPOTIFY_COLLECTION_LIMIT=25             # اختياري — حد مسارات الألبوم/القائمة (1-100)
-MUSIC_MAX_FILE_SIZE_MB=40               # اختياري — حد ملف الصوت المؤقت
-MUSIC_DOWNLOAD_TIMEOUT_SECONDS=120      # اختياري — مهلة تحميل المسار
-MUSIC_TEMP_DIR=/tmp/the-z-music         # اختياري — مجلد الكاش الصوتي
-MUSIC_COOKIES_PATH=/etc/secrets/youtube-cookies.txt  # اختياري — Render Secret File
-MUSIC_COOKIES_BASE64=...                # بديل للملف: base64 لملف cookies.txt
-MUSIC_PROXY=...                         # اختياري — بروكسي لـ yt-dlp
-MUSIC_PREFER_SOUNDCLOUD=false           # اختياري — اجعل SoundCloud أولًا للبحث
 ```
-
-يحمّل البوت الصوت عبر `yt-dlp` إلى كاش مؤقت داخل نفس الحاوية، ثم يقدّمه إلى Lavalink عبر خادم HTTP محلي محمي برمز عشوائي. هذا المسار مقصود: روابط `googlevideo` المباشرة ترتبط بترويسات طلب المستخرج وتعود بـ `403` عند تمريرها إلى مصدر HTTP في Lavalink.
-
-روابط Spotify:
-- **روابط Spotify العامة تعمل بدون `SPOTIFY_CLIENT_ID` أو `SPOTIFY_CLIENT_SECRET` وبدون Spotify Premium.** يقرأ البوت العنوان والفنان من صفحة embed العامة أو oEmbed، ثم يبحث عن نسخة صوتية مطابقة على YouTube أو SoundCloud ويجهزها عبر `yt-dlp`. قد تختلف النسخة عن تسجيل Spotify، لأن Spotify لا يرسل الصوت إلى البوت.
-- تُضاف مسارات الألبوم/القائمة بالترتيب حتى حد `SPOTIFY_COLLECTION_LIMIT`، ويُتخطى أي مسار تعذّر تجهيزه. القوائم الخاصة قد لا تكون قابلة للقراءة.
-
-### YouTube على الاستضافات السحابية (Render)
-
-قد يرفض YouTube الطلبات القادمة من IP الاستضافة برسالة **`Sign in to confirm you're not a bot`**. عند البحث بالاسم أو تشغيل رابط Spotify، يتحول البوت تلقائيًا إلى البحث في SoundCloud كخطة احتياطية. أما روابط YouTube المباشرة فتحتاج إلى cookies صالحة (أو بروكسي).
-
-**إضافة YouTube cookies على Render:**
-1. صدّر `cookies.txt` بصيغة Netscape من متصفح مسجّل فيه حساب YouTube (مثل إضافة **Get cookies.txt LOCALLY**). لا ترفع الملف إلى Git.
-2. من لوحة Render: **Environment → Secret Files → Add Secret File**، الاسم `youtube-cookies.txt`، والصق محتوى الملف.
-3. أضف متغير البيئة `MUSIC_COOKIES_PATH=/etc/secrets/youtube-cookies.txt` ثم أعد النشر.
-4. بديل بدون Secret File: نفّذ `base64 -w0 cookies.txt` وضع الناتج في `MUSIC_COOKIES_BASE64`.
-
-الكوكيز تنتهي مع الوقت؛ حدّثها عند تكرار الخطأ. يمكن أيضًا ضبط `MUSIC_PROXY` لتمرير yt-dlp عبر بروكسي، أو `MUSIC_PREFER_SOUNDCLOUD=true` لتفضيل SoundCloud في البحث دائمًا.
-
-عند تشغيل Lavalink على خادم منفصل عن البوت، اضبط `MUSIC_AUDIO_PUBLIC_URL` ليشير إلى خادم الملفات المؤقتة، و`MUSIC_AUDIO_BIND_HOST=0.0.0.0` عند الحاجة. في النشر الافتراضي (Lavalink والبوت داخل نفس الحاوية) لا يلزم ضبط أي منهما.
-
-لإبقاء البوت الأساسي في روم AFK أثناء تشغيل الموسيقى، افتح **إعدادات الموسيقى** في لوحة السيرفر وأدخل Bot Token لبوت Discord ثانٍ. أضف البوت الثاني إلى السيرفر نفسه بصلاحيات View Channel وConnect وSpeak وSend Messages وEmbed Links. يُتحقق من التوكن عبر Discord ويُخزن مشفرًا بـ AES-256-GCM. أضف `MUSIC_BOT_ENCRYPTION_KEY` نفسه إلى بيئة البوت والداشبورد (ولّده بـ `openssl rand -hex 32`)؛ إذا غيّرته لاحقًا، أعد حفظ التوكن من الداشبورد.
 
 **`dashboard/.env.local`**
 ```
@@ -132,7 +99,6 @@ NEXTAUTH_URL=http://localhost:3000
 DATABASE_URL=postgresql://user:password@host:5432/dbname?sslmode=require
 OWNER_ID=آيدي حسابك على ديسكورد        # يمنحك وصولاً كاملاً للوحة دائمًا
 DOWNLOADER_SECRET=نفس القيمة في البوت   # اختياري (وإلا يُستخدم NEXTAUTH_SECRET)
-MUSIC_BOT_ENCRYPTION_KEY=نفس القيمة في bot/.env
 ```
 
 ## 🏗️ البناء والتشغيل (تطوير)
@@ -167,7 +133,7 @@ npm run start            # تشغيل البيئة الكاملة (health → de
 
 ## 🚀 النشر (Render)
 
-بعد إضافة أوامر جديدة، سجّلها على Discord عبر `npm run deploy:commands`، أو اضبط `SKIP_DEPLOY=false` في Render ليعيد التطبيق نشر الأوامر عند الإقلاع. لأوامر الموسيقى يحتاج البوت صلاحيتَي الاتصال والتحدث في الروم الصوتي.
+بعد تغيير الأوامر، سجّل القائمة الجديدة على Discord عبر `npm run deploy:commands`. لإزالة أوامر موسيقى قديمة مسجلة على Discord، اضبط `SKIP_DEPLOY=false` مؤقتًا في Render وأعد النشر؛ بعد اكتمال نشر الأوامر، احذف المتغير أو أعده إلى `true`.
 
 المشروع جاهز للنشر على [Render](https://render.com) عبر Dockerfile و`render.yaml`:
 
@@ -184,8 +150,7 @@ npm run start            # تشغيل البيئة الكاملة (health → de
 4. يشغّل `start.js` التسلسل تلقائياً: فحص اتصال Discord ← نشر الأوامر ← تشغيل البوت ← تشغيل لوحة التحكم،
    مع خادم صحة على المنفذ المحدد حتى لا يقطع Render الخدمة.
 
-> **ملاحظة:** عند إضافة/إزالة أوامر من مجلد `bot/src/commands` تُنشر قائمة الأوامر كاملة تلقائياً
-> عند كل إقلاع (استبدال كامل عبر `PUT`)، فلا تبقى أوامر قديمة.
+> **ملاحظة:** نشر الأوامر يستبدل القائمة المسجلة كاملة، لذلك تختفي الأوامر المحذوفة بعد النشر التالي.
 
 ## 🗄️ قاعدة البيانات
 
