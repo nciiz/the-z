@@ -386,10 +386,10 @@ async function resolveAudio(input: string, isSearch: boolean): Promise<ResolvedA
     const { stdout } = await execFileAsync("yt-dlp", [
       "--no-warnings",
       "--no-playlist",
-      "--no-call-home",
       "--socket-timeout", "20",
       "--retries", "2",
       "--extractor-retries", "2",
+      "--js-runtimes", "node",
       "--format", "bestaudio/best",
       "--dump-json",
       "--get-url",
@@ -419,8 +419,12 @@ async function resolveAudio(input: string, isSearch: boolean): Promise<ResolvedA
       artworkUrl: typeof metadata?.thumbnail === "string" ? metadata.thumbnail : undefined
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[music/resolve] Audio source resolution failed: ${message.slice(0, 240)}`);
+    const processError = error as Error & { stderr?: string; code?: number | string };
+    console.warn("[music/resolve] Audio source resolution failed:", {
+      code: processError.code,
+      message: processError.message?.slice(0, 500),
+      stderr: processError.stderr?.trim().slice(-2_000)
+    });
     throw new Error("AUDIO_SOURCE_UNAVAILABLE");
   }
 }
@@ -488,10 +492,12 @@ export async function enqueueMusic(
     isSearch = true;
   }
 
+  // Join before resolving the media URL so a slow/failing source does not
+  // regress the old behavior where the music bot enters the requested voice channel.
+  const player = await getOrCreatePlayer(client, guild, voiceChannelId, textChannelId);
   const resolved = await resolveAudio(sourceInput, isSearch);
   displayTitle ??= resolved.title;
   displayAuthor ??= resolved.author;
-  const player = await getOrCreatePlayer(client, guild, voiceChannelId, textChannelId);
   const result = await player.search({ query: resolved.streamUrl }, requester);
   const selectedTrack = result.tracks?.[0];
   if (!selectedTrack) throw new Error("NO_PLAYABLE_SEARCH_RESULT");
