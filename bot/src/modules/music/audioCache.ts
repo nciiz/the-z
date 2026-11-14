@@ -474,12 +474,17 @@ export async function prepareAudio(identifier: string): Promise<PreparedAudio> {
     await sweepStaleJobsIfNeeded();
     jobDir = await fs.promises.mkdtemp(path.join(TEMP_ROOT, "job-"));
 
-    const outputTemplate = path.join(jobDir, "audio.%(ext)s");
+    const isSoundCloudSearch = /^scsearch\d*:/i.test(identifier);
+    const isSearch = /^(?:ytsearch|scsearch)\d*:/i.test(identifier);
+    const outputTemplate = isSoundCloudSearch
+      ? path.join(jobDir, "audio-%(playlist_index)03d-%(id)s.%(ext)s")
+      : path.join(jobDir, "audio.%(ext)s");
     const cookieArgs = getCookiesArgs();
     logCookieStatus(cookieArgs);
     const args = [
       "--no-warnings",
-      "--no-playlist",
+      ...(isSearch ? [] : ["--no-playlist"]),
+      ...(isSoundCloudSearch ? ["--playlist-end", "5", "--match-filters", "duration >= 60"] : []),
       "--socket-timeout", "20",
       "--retries", "3",
       "--extractor-retries", "3",
@@ -508,7 +513,9 @@ export async function prepareAudio(identifier: string): Promise<PreparedAudio> {
 
     let mediaFile: string | undefined;
     let mediaSize = 0;
+    if (isSoundCloudSearch) mediaCandidates.sort((left, right) => left.localeCompare(right));
     for (const candidate of mediaCandidates) {
+      if (isSoundCloudSearch && mediaFile) break;
       const candidatePath = path.join(jobDir, candidate);
       const stats = await fs.promises.stat(candidatePath);
       if (stats.isFile() && stats.size > mediaSize) {
@@ -519,8 +526,17 @@ export async function prepareAudio(identifier: string): Promise<PreparedAudio> {
     if (!mediaFile || mediaSize <= 0) throw new Error("NO_AUDIO_FILE");
     if (mediaSize > MAX_FILE_BYTES) throw new Error("AUDIO_FILE_TOO_LARGE");
 
+    const selectedInfoFile = `${mediaFile}.info.json`;
+    if (isSoundCloudSearch) {
+      const keepFiles = new Set([mediaFile, selectedInfoFile]);
+      await Promise.all(files
+        .filter((file) => file.startsWith("audio-") && !keepFiles.has(file))
+        .map((file) => fs.promises.rm(path.join(jobDir!, file), { force: true }).catch(() => undefined)));
+    }
+
     let metadata: Record<string, unknown> = {};
-    const infoFile = files.find((file) => file.endsWith(".info.json"));
+    const infoFile = (selectedInfoFile && files.includes(selectedInfoFile) ? selectedInfoFile : undefined)
+      || files.find((file) => file.endsWith(".info.json"));
     if (infoFile) {
       try {
         metadata = JSON.parse(await fs.promises.readFile(path.join(jobDir, infoFile), "utf8")) as Record<string, unknown>;

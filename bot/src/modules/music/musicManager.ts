@@ -101,6 +101,7 @@ function attachTrackAnnouncements(discord: DiscordClient, manager: LavalinkManag
   };
 
   manager.on("trackStart", async (player, track) => {
+    console.info(`[music/lavalink] trackStart guild=${player.guildId} title=${track?.info?.title || "unknown"} durationMs=${track?.info?.duration ?? "unknown"}`);
     const channel = getTextChannel(player);
     if (!track || !channel) return;
     const title = track.info.title.slice(0, 240);
@@ -138,7 +139,8 @@ function attachTrackAnnouncements(discord: DiscordClient, manager: LavalinkManag
 
   // Delete the temporary audio file as soon as Lavalink is done with it.
   // Tokens are idempotent, so cleaning on playerDestroy as well is safe.
-  manager.on("trackEnd", (_player, track) => {
+  manager.on("trackEnd", (player, track, payload) => {
+    console.info(`[music/lavalink] trackEnd guild=${player.guildId} title=${track?.info?.title || "unknown"} durationMs=${track?.info?.duration ?? "unknown"} reason=${payload?.reason ?? "unknown"}`);
     releaseAudioToken(trackAudioToken(track));
   });
   manager.on("playerDestroy", (player) => {
@@ -444,7 +446,7 @@ async function resolveAudio(input: string, isSearch: boolean): Promise<ResolvedA
   let triedSoundCloud = false;
   const trySoundCloud = async (): Promise<ResolvedAudio> => {
     triedSoundCloud = true;
-    return toResolvedAudio(await prepareAudio(`scsearch1:${searchQuery}`));
+    return toResolvedAudio(await prepareAudio(`scsearch5:${searchQuery}`));
   };
 
   if (shouldPreferSoundCloud()) {
