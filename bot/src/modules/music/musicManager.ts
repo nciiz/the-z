@@ -380,17 +380,23 @@ export async function enqueueMusic(
     query = `ytsearch:${query}`;
   }
 
+  const isSearch = query.startsWith("ytsearch:");
   const player = await getOrCreatePlayer(client, guild, voiceChannelId, textChannelId);
   const result = await player.search({ query }, requester);
   const tracks = result.tracks ?? [];
   if (!tracks.length) throw new Error("TRACK_NOT_FOUND");
-  // A text search returns many candidates; enqueue only the best match.
-  // Playlist URLs are intentionally disabled in the YouTube plugin config.
-  const selectedTracks = tracks.slice(0, 1);
+  // Search results sometimes start with a live/zero-duration result that loads
+  // metadata but never yields audio. Prefer a regular recording for name searches.
+  const selectedTrack = isSearch
+    ? tracks.find((track) => !track.info.isStream && (track.info.duration ?? 0) > 0)
+    : tracks[0];
+  if (!selectedTrack) throw new Error("NO_PLAYABLE_SEARCH_RESULT");
+  // Playlist URLs are disabled; normal searches enqueue only their best playable match.
+  const selectedTracks = [selectedTrack];
   const playlistSize = selectedTracks.length;
   const position = await player.queue.add(selectedTracks);
   if (!player.playing) await player.play();
-  return { title: tracks[0].info.title, position, playlistSize };
+  return { title: selectedTrack.info.title, position, playlistSize };
 }
 
 export function getMusicPlayer(client: ExtendedClient, guildId: string): Player | undefined {

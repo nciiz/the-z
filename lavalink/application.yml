@@ -21,7 +21,9 @@ plugins:
     allowSearch: true
     allowDirectVideoIds: true
     allowDirectPlaylistIds: false
+    # Prefer a client with audio playback support; retain web clients as fallbacks.
     clients:
+      - ANDROID_VR
       - WEB
       - WEBEMBEDDED
       - MUSIC
