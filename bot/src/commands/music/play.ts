@@ -27,7 +27,7 @@ const command: BotCommand = {
         username: ctx.user.username
       }, query);
       if (queued.position > 1) await ctx.reply(`أُضيف **${queued.title}** إلى قائمة التشغيل في المركز ${queued.position}.`);
-      else await ctx.reply(`بدأ تجهيز **${queued.title}** للتشغيل في <#${voiceChannel.id}>.${queued.playlistSize > 1 ? ` أُضيف ${queued.playlistSize} مسار من النتائج.` : ""}`);
+      else await ctx.reply(`أُرسل **${queued.title}** إلى مشغل الموسيقى في <#${voiceChannel.id}>. سيظهر تأكيد التشغيل عند وصول الصوت.`);
     } catch (error: any) {
       if (error?.message === "LAVALINK_NOT_READY") {
         await ctx.reply("خدمة الموسيقى غير جاهزة الآن. حاول بعد لحظات.");

@@ -88,10 +88,15 @@ function createNodeManager(
 }
 
 function attachTrackAnnouncements(discord: DiscordClient, manager: LavalinkManager): void {
+  const getTextChannel = (player: Player): TextChannel | undefined => {
+    if (!player.textChannelId) return undefined;
+    const channel = discord.channels.cache.get(player.textChannelId);
+    return channel?.isTextBased() && "send" in channel ? channel as TextChannel : undefined;
+  };
+
   manager.on("trackStart", async (player, track) => {
-    if (!track || !player.textChannelId) return;
-    const channel = discord.channels.cache.get(player.textChannelId) as TextChannel | undefined;
-    if (!channel?.isTextBased() || !("send" in channel)) return;
+    const channel = getTextChannel(player);
+    if (!track || !channel) return;
     const title = track.info.title.slice(0, 240);
     const description = track.info.uri ? `[${title}](${track.info.uri})` : title;
     const embed = new EmbedBuilder()
@@ -101,6 +106,31 @@ function attachTrackAnnouncements(discord: DiscordClient, manager: LavalinkManag
       .addFields({ name: "المدة", value: formatDuration(track.info.duration), inline: true });
     if (track.info.artworkUrl) embed.setThumbnail(track.info.artworkUrl);
     await channel.send({ embeds: [embed] }).catch(() => undefined);
+  });
+
+  manager.on("trackError", async (player, track, payload) => {
+    const title = track?.info?.title || "المقطع";
+    const exception = payload?.exception;
+    const message = exception?.message || exception?.cause || "سبب غير محدد";
+    console.error(`[music/lavalink] trackError guild=${player.guildId} title=${title}:`, {
+      severity: exception?.severity,
+      message: exception?.message,
+      cause: exception?.cause,
+      stackTrace: exception?.stackTrace
+    });
+    const channel = getTextChannel(player);
+    await channel?.send(`تعذر تشغيل **${title.slice(0, 180)}**: ${String(message).slice(0, 240)}`).catch(() => undefined);
+  });
+
+  manager.on("trackStuck", async (player, track, payload) => {
+    const title = track?.info?.title || "المقطع";
+    console.warn(`[music/lavalink] trackStuck guild=${player.guildId} title=${title} thresholdMs=${payload?.thresholdMs}`);
+    const channel = getTextChannel(player);
+    await channel?.send(`توقف مصدر الصوت للمقطع **${title.slice(0, 180)}** ولم يصل صوت خلال ${payload?.thresholdMs ?? "المدة المحددة"}ms.`).catch(() => undefined);
+  });
+
+  manager.on("playerSocketClosed", (player, payload) => {
+    console.warn(`[music/lavalink] playerSocketClosed guild=${player.guildId} code=${payload?.code} reason=${payload?.reason || "غير متوفر"}`);
   });
 }
 
