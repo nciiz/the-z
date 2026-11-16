@@ -48,10 +48,18 @@ export async function applyTemplate(guildId: string, templateId: string) {
     const session = await requireGuildAdmin(guildId);
     await ensureDb();
 
-    const template = await ServerTemplate.findOne({ id: templateId }).lean();
+    // القالب يجب أن يكون تابعًا للسيرفر نفسه — يمنع تطبيق إعدادات سيرفر آخر
+    // حتى لو أرسل العميل معرّف قالب لا يملكه.
+    const template = await ServerTemplate.findOne({ id: templateId, guildId }).lean();
     if (!template) throw new Error("القالب غير موجود");
 
-    await restoreBackup(guildId, template.backup);
+    await restoreBackup(guildId, template.backup, {
+      deleteExistingRoles: true,
+      deleteExistingChannels: true,
+      restoreRoles: true,
+      restoreChannels: true,
+      restoreBotConfig: true
+    });
 
     logAction({
       label: "templates/apply",
@@ -72,13 +80,17 @@ export async function applyTemplate(guildId: string, templateId: string) {
   }
 }
 
-export async function deleteTemplate(templateId: string) {
+export async function deleteTemplate(guildId: string, templateId: string) {
   try {
+    await requireGuildAdmin(guildId);
     await ensureDb();
-    const template = await ServerTemplate.findOne({ id: templateId }).lean();
+
+    // الحذف مقيّد بالسيرفر الحالي أيضًا، وليس بمعرّف القالب وحده.
+    const template = await ServerTemplate.findOne({ id: templateId, guildId }).lean();
     if (!template) throw new Error("القالب غير موجود");
-    await requireGuildAdmin(template.guildId);
-    await ServerTemplate.deleteOne({ id: templateId });
+
+    await ServerTemplate.deleteOne({ id: templateId, guildId });
+    revalidatePath(`/dashboard/${guildId}/templates`);
   } catch (error) {
     logError("templates/delete", error);
     throw error;

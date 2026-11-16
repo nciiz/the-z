@@ -78,35 +78,40 @@ export async function createBackup(guildId: string, options: BackupOptions = {
         })) || []
       })) : [],
       
-      config: options.includeBotConfig ? {
-        prefix: config?.prefix || "!",
-        automod: config?.automod,
-        tickets: config?.tickets,
-        tempVoice: config?.tempVoice,
-        welcome: config?.welcome,
-        captcha: config?.captcha,
-        leveling: config?.leveling,
-        jail: config?.jail,
-        logging: config?.logging,
-        antiNuke: config?.antiNuke,
-        autoResponse: config?.autoResponse,
-        selfRoles: config?.selfRoles,
-        colorRoles: config?.colorRoles
-      } : {
-        prefix: "!",
-        automod: null,
-        tickets: null,
-        tempVoice: null,
-        welcome: null,
-        captcha: null,
-        leveling: null,
-        jail: null,
-        logging: null,
-        antiNuke: null,
-        autoResponse: null,
-        selfRoles: null,
-        colorRoles: null
-      }
+      config: options.includeBotConfig && config ? {
+        prefix: config.prefix || "!",
+        embedColor: config.embedColor,
+        automod: config.automod,
+        tickets: config.tickets,
+        tempVoice: config.tempVoice,
+        alwaysVoice: config.alwaysVoice,
+        colors: config.colors,
+        welcome: config.welcome,
+        leave: config.leave,
+        autoResponses: config.autoResponses,
+        autoRole: config.autoRole,
+        selfRoles: config.selfRoles,
+        leveling: config.leveling,
+        logging: config.logging,
+        moderation: config.moderation,
+        jail: config.jail,
+        antiNuke: config.antiNuke,
+        captcha: config.captcha,
+        commandOverrides: config.commandOverrides,
+        memberCounter: config.memberCounter,
+        counting: config.counting,
+        scheduledMessages: config.scheduledMessages,
+        islamicContent: config.islamicContent,
+        reactionRoles: config.reactionRoles,
+        gifBlock: config.gifBlock,
+        movies: config.movies,
+        starboard: config.starboard,
+        suggestions: config.suggestions,
+        dashboard: config.dashboard,
+        // توافق مع النسخ القديمة التي كانت تقرأ هذين الاسمين
+        autoResponse: config.autoResponses,
+        colorRoles: config.colors
+      } : null
     };
 
     logAction({

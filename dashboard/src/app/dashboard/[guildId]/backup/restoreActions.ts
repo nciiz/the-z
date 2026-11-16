@@ -45,9 +45,21 @@ export async function restoreBackup(guildId: string, backup: ServerBackup, optio
       }
     });
 
+    // خريطة ربط رتب النسخة الاحتياطية برتب السيرفر الهدف. تُستخدم أيضًا عند
+    // إعادة إنشاء صلاحيات القنوات حتى لا تُنسخ معرّفات رتب سيرفر آخر.
+    const roleIdMap = new Map<string, string>();
+
+    const resolveRoleOverwriteId = (sourceRoleId: string): string | null => {
+      // @everyone في النسخة يحمل معرّف السيرفر المصدر
+      if (sourceRoleId === backup.guildId) return guildId;
+      const mapped = roleIdMap.get(sourceRoleId);
+      if (mapped) return mapped;
+      // استعادة داخل السيرفر نفسه: المعرّفات الأصلية صالحة
+      return backup.guildId === guildId ? sourceRoleId : null;
+    };
+
     // Step 1: Restore roles if requested
     if (options.restoreRoles && backup.roles.length > 0) {
-      const roleIdMap = new Map<string, string>();
       const existingRoles = await fetch(`https://discord.com/api/v10/guilds/${guildId}/roles`, {
         headers: botHeaders()
       }).then(r => r.json());
@@ -150,6 +162,21 @@ export async function restoreBackup(guildId: string, backup: ServerBackup, optio
       }
     }
 
+    /**
+     * يحوّل صلاحيات القناة من معرّفات النسخة المصدر إلى معرّفات السيرفر الهدف.
+     * صلاحيات الرتب غير القابلة للربط تُحذف بدل تمرير معرّف قد يطابق رتبة
+     * مختلفة في السيرفر الهدف. صلاحيات الأعضاء آمنة لأن معرّفات المستخدمين عالمية.
+     */
+    const mapPermissionOverwrites = (overwrites: ServerBackup["channels"][number]["permissionOverwrites"]) =>
+      overwrites.flatMap((ow) => {
+        if (ow.type === "role") {
+          const roleId = resolveRoleOverwriteId(ow.id);
+          if (!roleId) return [];
+          return [{ id: roleId, type: 0, allow: ow.allow, deny: ow.deny }];
+        }
+        return [{ id: ow.id, type: 1, allow: ow.allow, deny: ow.deny }];
+      });
+
     // Step 2: Restore channels if requested
     if (options.restoreChannels && backup.channels.length > 0) {
       const channelIdMap = new Map<string, string>();
@@ -216,12 +243,7 @@ export async function restoreBackup(guildId: string, backup: ServerBackup, optio
                 type: 4, // category
                 name: category.name,
                 position: category.position,
-                permission_overwrites: category.permissionOverwrites.map(ow => ({
-                  id: ow.id,
-                  type: ow.type === "role" ? 0 : 1,
-                  allow: ow.allow,
-                  deny: ow.deny
-                }))
+                permission_overwrites: mapPermissionOverwrites(category.permissionOverwrites)
               })
             });
             
@@ -279,12 +301,7 @@ export async function restoreBackup(guildId: string, backup: ServerBackup, optio
                 topic: channel.topic,
                 nsfw: channel.nsfw,
                 rate_limit_per_user: channel.rateLimitPerUser,
-                permission_overwrites: channel.permissionOverwrites.map(ow => ({
-                  id: ow.id,
-                  type: ow.type === "role" ? 0 : 1,
-                  allow: ow.allow,
-                  deny: ow.deny
-                }))
+                permission_overwrites: mapPermissionOverwrites(channel.permissionOverwrites)
               })
             });
             
@@ -317,27 +334,54 @@ export async function restoreBackup(guildId: string, backup: ServerBackup, optio
 
     // Step 3: Restore bot configuration if requested
     if (options.restoreBotConfig && backup.config) {
-      const newConfig = {
-        prefix: backup.config.prefix,
-        automod: backup.config.automod,
-        tickets: backup.config.tickets,
-        tempVoice: backup.config.tempVoice,
-        welcome: backup.config.welcome,
-        captcha: backup.config.captcha,
-        leveling: backup.config.leveling,
-        jail: backup.config.jail,
-        logging: backup.config.logging,
-        antiNuke: backup.config.antiNuke,
-        autoResponse: backup.config.autoResponse,
-        selfRoles: backup.config.selfRoles,
-        colorRoles: backup.config.colorRoles
+      const source = backup.config as Record<string, any>;
+
+      // نقرأ أسماء الحقول الحالية، مع دعم النسخ القديمة التي استخدمت
+      // autoResponse/colorRoles. لا نمرّر القيم الغائبة حتى لا تُمسح إعدادات
+      // موجودة في السيرفر الهدف بسبب نسخة احتياطية قديمة أو جزئية.
+      const newConfig: Record<string, any> = {
+        prefix: source.prefix,
+        embedColor: source.embedColor,
+        automod: source.automod,
+        tickets: source.tickets,
+        tempVoice: source.tempVoice,
+        alwaysVoice: source.alwaysVoice,
+        colors: source.colors ?? source.colorRoles,
+        welcome: source.welcome,
+        leave: source.leave,
+        autoResponses: source.autoResponses ?? source.autoResponse,
+        autoRole: source.autoRole,
+        selfRoles: source.selfRoles,
+        leveling: source.leveling,
+        logging: source.logging,
+        moderation: source.moderation,
+        jail: source.jail,
+        antiNuke: source.antiNuke,
+        captcha: source.captcha,
+        commandOverrides: source.commandOverrides,
+        memberCounter: source.memberCounter,
+        counting: source.counting,
+        scheduledMessages: source.scheduledMessages,
+        islamicContent: source.islamicContent,
+        reactionRoles: source.reactionRoles,
+        gifBlock: source.gifBlock,
+        movies: source.movies,
+        starboard: source.starboard,
+        suggestions: source.suggestions,
+        dashboard: source.dashboard
       };
 
-      const existingConfig = await GuildConfig.findOne({ guildId });
-      if (existingConfig) {
-        await GuildConfig.findOneAndUpdate({ guildId }, { $set: newConfig });
-      } else {
-        await GuildConfig.create({ guildId, ...newConfig });
+      for (const key of Object.keys(newConfig)) {
+        if (newConfig[key] == null) delete newConfig[key];
+      }
+
+      if (Object.keys(newConfig).length > 0) {
+        const existingConfig = await GuildConfig.findOne({ guildId });
+        if (existingConfig) {
+          await GuildConfig.findOneAndUpdate({ guildId }, { $set: newConfig });
+        } else {
+          await GuildConfig.create({ guildId, ...newConfig });
+        }
       }
     }
 

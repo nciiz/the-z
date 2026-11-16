@@ -16,7 +16,7 @@ export default async function GuildAccessPage({ params }: { params: { guildId: s
     <div>
       <PageHeader
         title="إدارة الوصول للداشبورد"
-        description="فقط المستخدمون في هذه القائمة يمكنهم تسجيل الدخول واستخدام لوحة التحكم في أي سيرفر."
+        description="قائمة عامة للسماح بالدخول إلى اللوحة. صلاحية الوصول إلى إعدادات كل سيرفر تُحدد بشكل منفصل من صلاحيات ذلك السيرفر، ولا تمنح هذه القائمة وحدها وصولًا إلى سيرفرات أخرى."
       />
       <AccessManager initialIds={effective} ownerId={OWNER_ID} />
     </div>

@@ -80,7 +80,7 @@ export default function TemplatesForm({
                   <p className="font-medium text-[#F4EFE2]">{t.name}</p>
                   {t.description && <p className="text-xs text-slate-400">{t.description}</p>}
                   <p className="mt-0.5 text-xs text-slate-500">
-                    من سيرفر {t.guildName ?? t.guildId} - {t.backup.roles.length} رتبة، {t.backup.channels.length} روم -{" "}
+                    {t.backup.roles.length} رتبة، {t.backup.channels.length} روم -{" "}
                     {new Date(t.createdAt).toLocaleDateString("ar-EG")}
                   </p>
                 </div>
@@ -103,7 +103,7 @@ export default function TemplatesForm({
                   <button
                     type="button"
                     className="btn-danger !px-3 !py-1.5 text-sm"
-                    onClick={() => deleteTemplate(t.id)}
+                    onClick={() => deleteTemplate(guildId, t.id)}
                   >
                     حذف
                   </button>

@@ -96,6 +96,11 @@ export default function GifBlockForm({ guildId, initial, channels, roles }: GifB
 
       if (!response.ok) throw new Error("Failed to save");
 
+      const data = await response.json().catch(() => null);
+      if (Array.isArray(data?.gifBlocks)) {
+        setState(prev => ({ ...prev, gifBlocks: data.gifBlocks }));
+      }
+
       alert("تم حفظ إعدادات حظر GIFs بنجاح!");
     } catch (error) {
       alert("فشل حفظ الإعدادات. حاول مرة أخرى.");

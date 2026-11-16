@@ -1,3 +1,5 @@
+import type { IGuildConfig } from "./guildConfig";
+
 export interface BackupOptions {
   includeRoles: boolean;
   includeChannels: boolean;
@@ -56,20 +58,12 @@ export interface ServerBackup {
     }>;
   }>;
   
-  // Bot configuration
-  config: {
-    prefix: string;
-    automod: any;
-    tickets: any;
-    tempVoice: any;
-    welcome: any;
-    captcha: any;
-    leveling: any;
-    jail: any;
-    logging: any;
-    antiNuke: any;
-    autoResponse: any;
-    selfRoles: any;
-    colorRoles: any;
-  };
+  // Bot configuration — إعدادات السيرفر فقط، دون guildId/createdAt/updatedAt.
+  // الحقول القديمة autoResponse/colorRoles باقية لقراءة النسخ القديمة.
+  config: (Partial<Omit<IGuildConfig, "guildId" | "createdAt" | "updatedAt">> & {
+    /** @deprecated استُبدل بـ autoResponses */
+    autoResponse?: any;
+    /** @deprecated استُبدل بـ colors */
+    colorRoles?: any;
+  }) | null;
 }

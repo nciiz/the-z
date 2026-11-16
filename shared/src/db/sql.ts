@@ -18,6 +18,9 @@ export interface SqlQuery {
 /** مسارات بسيطة فقط (مفاتيح آمنة لا تحتوي على نقاط) تُدفع إلى SQL؛ غير ذلك تبقى JS */
 const SIMPLE_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
+/** معرّفات الصفوف تُولَّد بـ randomUUID، فلا نمرّر إلا UUID صالحًا إلى عمود id */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 type ParamFn = (v: SqlValue) => string;
 
 function existsSql(path: string, p: ParamFn): string {
@@ -118,6 +121,15 @@ export function buildSqlWhere(filter: Record<string, any>, indexField?: string):
 
   for (const [path, condition] of Object.entries(filter)) {
     if (path === indexField) continue;
+    // `_id` هو عمود الصف الحقيقي وليس حقلًا داخل JSONB. ندفعه إلى عمود id
+    // عندما يكون UUID صالحًا (كفاءة)، وإلا نتركه لمطابقة JS التي تضيفه من
+    // العمود id، وإلا استُثنيت كل الصفوف خطأً.
+    if (path === "_id") {
+      if (typeof condition === "string" && UUID_RE.test(condition)) {
+        clauses.push(`id = ${add(condition)}`);
+      }
+      continue;
+    }
     if (!SIMPLE_KEY_RE.test(path)) continue; // المسارات المركّبة (Dot paths) تبقى في JS
     const expr = buildSimpleCondition(path, condition, add);
     if (expr) clauses.push(`(${expr})`);

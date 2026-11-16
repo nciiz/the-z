@@ -20,8 +20,8 @@ export async function POST(request: NextRequest, { params }: { params: { guildId
 
   try {
     const body: GifBlockInput = await request.json();
-    await saveGifBlockConfig(params.guildId, body);
-    return NextResponse.json({ success: true });
+    const result = await saveGifBlockConfig(params.guildId, body);
+    return NextResponse.json({ success: true, gifBlocks: result.gifBlocks });
   } catch (error) {
     console.error("Failed to save GIF block config:", error);
     return NextResponse.json(

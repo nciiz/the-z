@@ -95,6 +95,15 @@ export function matchesFilter(data: any, filter: Filter): boolean {
   });
 }
 
+/**
+ * يطابق صف قاعدة البيانات مع الفلتر، مع إتاحة `_id` كمعرّف الصف الحقيقي.
+ * معرّف `_id` لا يُخزَّن داخل JSONB (بل في العمود `id`)، لذا من دون هذه
+ * الإضافة تُرجع كل استعلامات `{ _id }` صفرًا رغم وجود الصف.
+ */
+function rowMatches(row: any, filter: Filter): boolean {
+  return matchesFilter({ ...row.data, _id: row.id }, filter);
+}
+
 function getSimplePath(obj: any, path: string): any {
   return path.split(".").reduce((acc, key) => (acc == null ? undefined : acc[key]), obj);
 }
@@ -216,7 +225,7 @@ class FindQuery<T> implements PromiseLike<T> {
     const sql = where ? `SELECT id, data FROM ${this.tableName} WHERE ${where}` : `SELECT id, data FROM ${this.tableName}`;
     const rows = (await pool.query(sql, params as any[])).rows;
 
-    let filtered = rows.filter((r: any) => matchesFilter(r.data, this.filter));
+    let filtered = rows.filter((r: any) => rowMatches(r, this.filter));
 
     if (this._sort) {
       const [sortKey, sortDir] = Object.entries(this._sort)[0] ?? [];
@@ -328,12 +337,14 @@ export class Collection<T extends Record<string, any>> {
     const sql = where ? `SELECT id, data FROM ${this.tableName} WHERE ${where}` : `SELECT id, data FROM ${this.tableName}`;
     const rows = (await pool.query(sql, params as any[])).rows;
 
-    const match = rows.find((r: any) => matchesFilter(r.data, filter));
+    const match = rows.find((r: any) => rowMatches(r, filter));
 
     if (!match) {
       if (!options.upsert) return null;
       const base: Record<string, any> = { ...this.defaults() };
       for (const [key, value] of Object.entries(filter)) {
+        // `_id` معرّف صف يُولّده المخزن، ولا يجوز نسخه إلى بيانات المستند
+        if (key === "_id") continue;
         if (!key.includes(".") && (typeof value !== "object" || value === null)) {
           setSimplePath(base, key, value);
         }
@@ -355,10 +366,10 @@ export class Collection<T extends Record<string, any>> {
     await this.ensureTable();
     const pool = getPool();
     const { where, params } = buildSqlWhere(filter, this.indexField);
-    const sql = where ? `SELECT data FROM ${this.tableName} WHERE ${where}` : `SELECT data FROM ${this.tableName}`;
+    const sql = where ? `SELECT id, data FROM ${this.tableName} WHERE ${where}` : `SELECT id, data FROM ${this.tableName}`;
     const rows = (await pool.query(sql, params as any[])).rows;
 
-    return rows.filter((r: any) => matchesFilter(r.data, filter)).length;
+    return rows.filter((r: any) => rowMatches(r, filter)).length;
   }
 
   async deleteOne(filter: Filter): Promise<void> {
@@ -368,7 +379,7 @@ export class Collection<T extends Record<string, any>> {
     const sql = where ? `SELECT id, data FROM ${this.tableName} WHERE ${where}` : `SELECT id, data FROM ${this.tableName}`;
     const rows = (await pool.query(sql, params as any[])).rows;
 
-    const match = rows.find((r: any) => matchesFilter(r.data, filter));
+    const match = rows.find((r: any) => rowMatches(r, filter));
     if (match) await pool.query(`DELETE FROM ${this.tableName} WHERE id = $1`, [match.id]);
   }
 
@@ -379,7 +390,7 @@ export class Collection<T extends Record<string, any>> {
     const sql = where ? `SELECT id, data FROM ${this.tableName} WHERE ${where}` : `SELECT id, data FROM ${this.tableName}`;
     const rows = (await pool.query(sql, params as any[])).rows;
 
-    const match = rows.find((r: any) => matchesFilter(r.data, filter));
+    const match = rows.find((r: any) => rowMatches(r, filter));
     if (!match) return;
 
     const updatedData = applyUpdate({ ...match.data }, update, filter);
@@ -397,7 +408,7 @@ export class Collection<T extends Record<string, any>> {
     const sql = where ? `SELECT id, data FROM ${this.tableName} WHERE ${where}` : `SELECT id, data FROM ${this.tableName}`;
     const rows = (await pool.query(sql, params as any[])).rows;
 
-    const matches = rows.filter((r: any) => matchesFilter(r.data, filter));
+    const matches = rows.filter((r: any) => rowMatches(r, filter));
     for (const match of matches) {
       const updatedData = applyUpdate({ ...match.data }, update, filter);
       await pool.query(

@@ -46,11 +46,17 @@ export async function saveGifBlockConfig(guildId: string, input: GifBlockInput) 
   const existingBlocks = await GifBlock.find({ guildId });
   const existingIds = new Set(existingBlocks.map(b => b._id?.toString()));
 
+  // نعيد القائمة النهائية للعميل حتى يستبدل المعرّفات المؤقتة (Date.now)
+  // بمعرّفات الصفوف الحقيقية، فلا تتكرر الكتل عند الحفظ أكثر من مرة.
+  const savedBlocks: GifBlockInput["gifBlocks"] = [];
+
   // Update or create blocks
   for (const block of input.gifBlocks) {
     if (existingIds.has(block.id)) {
+      // يجب أن يظل معرّف السيرفر ضمن شرط التحديث حتى لا يمكن تعديل صف
+      // يخص سيرفرًا آخر عبر إرسال معرّفه في الحمولة.
       await GifBlock.findOneAndUpdate(
-        { _id: block.id },
+        { _id: block.id, guildId },
         {
           $set: {
             url: block.url,
@@ -61,9 +67,10 @@ export async function saveGifBlockConfig(guildId: string, input: GifBlockInput) 
           }
         }
       );
+      savedBlocks.push(block);
       existingIds.delete(block.id);
     } else {
-      await GifBlock.create({
+      const created = await GifBlock.create({
         guildId,
         url: block.url,
         action: block.action,
@@ -73,12 +80,13 @@ export async function saveGifBlockConfig(guildId: string, input: GifBlockInput) 
         addedBy: "dashboard", // You might want to track the actual user
         addedAt: new Date()
       });
+      savedBlocks.push({ ...block, id: created._id?.toString() || block.id });
     }
   }
 
-  // Delete removed blocks
+  // Delete removed blocks — مقيّدة بالسيرفر الحالي أيضًا
   for (const id of existingIds) {
-    await GifBlock.deleteOne({ _id: id });
+    await GifBlock.deleteOne({ _id: id, guildId });
   }
 
   logAction({
@@ -91,4 +99,5 @@ export async function saveGifBlockConfig(guildId: string, input: GifBlockInput) 
   });
 
   revalidatePath(`/dashboard/${guildId}/gifblock`);
+  return { gifBlocks: savedBlocks };
 }

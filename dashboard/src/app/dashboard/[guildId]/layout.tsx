@@ -15,7 +15,9 @@ export default async function GuildLayout({
   const guild = await getGuildInfo(params.guildId);
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
+    // مفتاح السيرفر يُعيد تركيب الشجرة كاملة عند الانتقال بين سيرفرين،
+    // فلا تبقى حالة نماذج أو إغلاقات من السيرفر السابق.
+    <div key={params.guildId} className="mx-auto w-full max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8 flex items-center gap-4">
         <Link href="/dashboard" className="btn-secondary !px-4 !py-2 text-sm">
           ← السيرفرات

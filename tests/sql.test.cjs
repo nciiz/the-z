@@ -53,6 +53,21 @@ test("buildSqlWhere: null value → IS NULL with existence", () => {
   assert.ok(q.where.includes("IS NULL"));
 });
 
+test("buildSqlWhere: _id is left to JS (stored outside JSONB)", () => {
+  const q = buildSqlWhere({ _id: "row-id", guildId: "G" }, "guildId");
+  assert.ok(!q.where.includes("data->>'_id'"));
+  assert.ok(q.where.includes("key_id = $1"));
+  assert.deepEqual(q.params, ["G"]);
+});
+
+test("buildSqlWhere: UUID _id maps to the id column", () => {
+  const id = "123e4567-e89b-42d3-a456-426614174000";
+  const q = buildSqlWhere({ _id: id, guildId: "G" }, "guildId");
+  assert.ok(q.where.includes("id = $2"));
+  assert.ok(!q.where.includes("data->>'_id'"));
+  assert.deepEqual(q.params, ["G", id]);
+});
+
 test("buildSqlWhere: dot paths left to JS stage (not in SQL)", () => {
   const q = buildSqlWhere({ "selfRoles.id": "abc", guildId: "G" }, "guildId");
   assert.ok(!q.where.includes("selfRoles"));
